@@ -97,7 +97,7 @@ jobs:
     name: Build, Push & Deploy to Amazon ECS
     needs: [test-backend, build-frontend, validate-terraform]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.AWS_ACCESS_KEY_ID != ''
 
     steps:
       - name: Checkout Code
