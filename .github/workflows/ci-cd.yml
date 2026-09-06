@@ -97,13 +97,27 @@ jobs:
     name: Build, Push & Deploy to Amazon ECS
     needs: [test-backend, build-frontend, validate-terraform]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.AWS_ACCESS_KEY_ID != ''
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
+      - name: Check AWS Secrets Availability
+        id: check-creds
+        env:
+          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -z "$AWS_KEY" ]; then
+            echo "has_creds=false" >> $GITHUB_OUTPUT
+            echo "::notice ::AWS_ACCESS_KEY_ID not found in repository secrets. Skipping cloud push & ECS deployment."
+          else
+            echo "has_creds=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout Code
+        if: steps.check-creds.outputs.has_creds == 'true'
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
+        if: steps.check-creds.outputs.has_creds == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -111,10 +125,12 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
       - name: Log in to Amazon ECR
+        if: steps.check-creds.outputs.has_creds == 'true'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, Tag & Push Backend Docker Image
+        if: steps.check-creds.outputs.has_creds == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY || 'videotube-dev-backend' }}
@@ -125,6 +141,7 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
       - name: Trigger ECS Service Deployment
+        if: steps.check-creds.outputs.has_creds == 'true'
         env:
           ECS_CLUSTER: ${{ secrets.ECS_CLUSTER || 'videotube-dev-cluster' }}
           ECS_SERVICE: ${{ secrets.ECS_SERVICE || 'videotube-dev-service' }}
