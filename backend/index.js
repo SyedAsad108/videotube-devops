@@ -10,13 +10,9 @@ import { app } from "./app.js"
 dotenv.config({
     path: './.env'
 })
-connectDB()
-    .then(() => {
-        const port = process.env.PORT || 8000
-        app.listen(port, () => {
-            console.log(`App listening on ${port}`)
-        })
-    })
-    .catch((err) => {
-        console.log("Mongodb Connection failed: ", err)
-    })
+const port = process.env.PORT || 8000;
+app.listen(port, () => {
+    console.log(`App listening on port ${port}`);
+});
+
+connectDB();

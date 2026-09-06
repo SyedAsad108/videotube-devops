@@ -36,7 +36,7 @@ jobs:
         run: npm ci
 
       - name: Verify Application Syntax & App Boot
-        run: node -e "import('./app.js').then(() => console.log('App boots cleanly')).catch((err) => { console.error(err); process.exit(1); })"
+        run: node -e "import('./app.js').then(() => { console.log('App boots cleanly'); process.exit(0); }).catch((err) => { console.error(err); process.exit(1); })"
 
   # ==========================================
   # Job 2: Frontend Compilation & Build

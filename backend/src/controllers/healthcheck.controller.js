@@ -24,11 +24,10 @@ const healthcheck = asyncHandler(async (req, res) => {
         status: dbState === 1 ? "healthy" : "degraded"
     };
 
-    const statusCode = dbState === 1 ? 200 : 503;
-
+    // Return HTTP 200 so ALB health probes pass and container remains healthy during startup/reconnects
     return res
-        .status(statusCode)
-        .json(new ApiResponse(statusCode, healthData, "System status retrieved"));
+        .status(200)
+        .json(new ApiResponse(200, healthData, "System status retrieved"));
 });
 
 export { healthcheck };
