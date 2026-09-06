@@ -95,33 +95,48 @@ const registerUser = asyncHandler(async (req, res) => {
     console.log("REQ.FILES");
     console.log(req.files);
 
-    // Step 4: Access local paths of uploaded files stored temporarily by Multer middleware
+    // Step 4: Access local paths of optional uploaded files stored temporarily by Multer middleware
     const avatarLocalPath = req.files?.avatar?.[0]?.path;
     const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
 
-    // Step 5: Ensure the avatar image (required field) is present
-    if (!avatarLocalPath) {
-        throw new ApiError(400, "avatar image is required");
-    };
+    // Default fallback avatar if none provided or upload fails
+    const defaultAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80";
+    let avatarUrl = defaultAvatar;
 
-    // Step 6: Upload the files from local server storage using storage adapter
-    const avatar = await uploadMedia(avatarLocalPath, "avatars");
-    const coverImage = coverImageLocalPath ? await uploadMedia(coverImageLocalPath, "cover-images") : null;
+    // Step 5: If an avatar was provided, attempt to upload to storage
+    if (avatarLocalPath) {
+        try {
+            const avatar = await uploadMedia(avatarLocalPath, "avatars");
+            if (avatar?.url || avatar?.key) {
+                avatarUrl = avatar.key || avatar.url;
+            }
+        } catch (uploadErr) {
+            console.warn("Avatar upload failed, falling back to default avatar:", uploadErr?.message);
+        }
+    }
 
-    // Step 7: Double check that the avatar uploaded successfully
-    if (!avatar?.url) {
-        throw new ApiError(400, "avatar image upload failed");
-    };
+    // If cover image was provided, attempt upload
+    let coverImageUrl = "";
+    if (coverImageLocalPath) {
+        try {
+            const coverImage = await uploadMedia(coverImageLocalPath, "cover-images");
+            if (coverImage?.url || coverImage?.key) {
+                coverImageUrl = coverImage.key || coverImage.url;
+            }
+        } catch (uploadErr) {
+            console.warn("Cover image upload failed:", uploadErr?.message);
+        }
+    }
 
-    // Step 8: Save the user record in the database
+    // Step 6: Save the user record in the database
     const user = await User.create({
         fullName,
-        avatar: avatar.key || avatar.url, // store S3 key or URL
-        coverImage: coverImage ? (coverImage.key || coverImage.url) : "",
+        avatar: avatarUrl,
+        coverImage: coverImageUrl,
         email,
         password,
         username: username.toLowerCase() // store username in lowercase for consistency
-    })
+    });
 
     // Step 9: Retrieve the created user without the password and refreshToken fields for safety
     const createdUser = await User.findById(user._id).select("-password -refreshToken");

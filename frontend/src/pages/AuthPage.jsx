@@ -41,11 +41,6 @@ const AuthPage = () => {
         e.preventDefault();
         setError("");
 
-        if (!avatar) {
-            setError("Avatar image is required.");
-            return;
-        }
-
         setLoading(true);
         try {
             const formData = new FormData();
@@ -53,7 +48,9 @@ const AuthPage = () => {
             formData.append("username", username.trim());
             formData.append("email", email.trim());
             formData.append("password", password);
-            formData.append("avatar", avatar);
+            if (avatar) {
+                formData.append("avatar", avatar);
+            }
             if (coverImage) {
                 formData.append("coverImage", coverImage);
             }
@@ -176,12 +173,11 @@ const AuthPage = () => {
                         </div>
 
                         <div className="form-group">
-                            <label>Avatar Photo *</label>
+                            <label>Avatar Photo (Optional)</label>
                             <input
                                 type="file"
                                 accept="image/*"
                                 onChange={(e) => setAvatar(e.target.files[0])}
-                                required
                             />
                         </div>
 

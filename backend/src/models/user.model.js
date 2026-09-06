@@ -32,9 +32,8 @@ const userSchema = new Schema(
         },
         avatar: {
             type: String,
-            required: true,
+            default: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
             trim: true,
-
         },
         coverImage: {
             type: String
