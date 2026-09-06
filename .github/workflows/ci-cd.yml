@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   # ==========================================
-  # Job 1: Backend Testing & Linting
+  # Job 1: Backend Testing & Syntax Check
   # ==========================================
   test-backend:
     name: Test & Validate Backend
@@ -93,6 +93,7 @@ jobs:
   # ==========================================
   # Job 4: Continuous Deployment to Amazon ECS (EC2)
   # Region: ap-south-1
+  # Deploys BOTH Backend and Frontend Services
   # ==========================================
   deploy-to-aws:
     name: Build, Push & Deploy to Amazon ECS (EC2)
@@ -101,18 +102,21 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     env:
-      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
       ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
-      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-      ECS_SERVICE: ${{ vars.ECS_SERVICE }}
-      # Task definition family must match what Terraform created
-      ECS_TASK_FAMILY: "videotube-dev-backend"
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'videotube-dev-cluster' }}
+      ECR_BACKEND_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'videotube-dev-backend' }}
+      ECR_FRONTEND_REPOSITORY: ${{ vars.ECR_FRONTEND_REPOSITORY || 'videotube-dev-frontend' }}
+      ECS_BACKEND_SERVICE: ${{ vars.ECS_SERVICE || 'videotube-dev-service' }}
+      ECS_FRONTEND_SERVICE: ${{ vars.ECS_FRONTEND_SERVICE || 'videotube-dev-frontend-service' }}
+      BACKEND_TASK_FAMILY: "videotube-dev-backend"
+      FRONTEND_TASK_FAMILY: "videotube-dev-frontend"
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 1. AWS Credentials via OIDC
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -120,74 +124,144 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           audience: sts.amazonaws.com
 
+      # 2. Login to Amazon ECR
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # 3. Build & Push Backend Docker Image
       - name: Build, Tag & Push Backend Docker Image
+        id: build-backend-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          echo "Building Docker image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "Building Backend Docker image: $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG"
           docker build \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            -t $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest \
             ./backend
-          echo "Pushing immutable image tag ($IMAGE_TAG) to Amazon ECR..."
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "Pushing 'latest' image tag to Amazon ECR..."
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-        id: build-image
+          echo "Pushing immutable backend tag ($IMAGE_TAG)..."
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG
+          echo "Pushing backend 'latest' tag..."
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Download Active ECS Task Definition
+      # 4. Build & Push Frontend Docker Image
+      - name: Build, Tag & Push Frontend Docker Image
+        id: build-frontend-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          aws ecs describe-task-definition \
-            --task-definition ${{ env.ECS_TASK_FAMILY }} \
-            --region ${{ env.AWS_REGION }} \
-            --query taskDefinition > task-def-raw.json
-          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' task-def-raw.json > task-definition.json
-          echo "Active task definition downloaded. Image in task:"
-          jq '.containerDefinitions[0].image' task-definition.json
+          echo "Building Frontend Docker image: $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG"
+          docker build \
+            -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest \
+            ./frontend
+          echo "Pushing immutable frontend tag ($IMAGE_TAG)..."
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG
+          echo "Pushing frontend 'latest' tag..."
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Render New Task Definition with Immutable Image Tag & Secrets
+      # 5. Download Active Task Definitions
+      - name: Download Active Task Definitions
+        run: |
+          echo "Downloading Backend Task Definition..."
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.BACKEND_TASK_FAMILY }} \
+            --region ${{ env.AWS_REGION }} \
+            --query taskDefinition > backend-task-def-raw.json
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' backend-task-def-raw.json > backend-task-definition.json
+
+          echo "Downloading Frontend Task Definition..."
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.FRONTEND_TASK_FAMILY }} \
+            --region ${{ env.AWS_REGION }} \
+            --query taskDefinition > frontend-task-def-raw.json
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' frontend-task-def-raw.json > frontend-task-definition.json
+
+      # 6. Render New Backend Task Definition
+      - name: Render New Backend Task Definition with Immutable Image Tag & Secrets
         id: render-backend-container
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: task-definition.json
+          task-definition: backend-task-definition.json
           container-name: backend
-          image: ${{ steps.build-image.outputs.image }}
+          image: ${{ steps.build-backend-image.outputs.image }}
           environment-variables: |
             MONGODB_URI=${{ secrets.MONGODB_URI }}
 
-      - name: Deploy Amazon ECS Task Definition & Wait for Stability
+      # 7. Render New Frontend Task Definition
+      - name: Render New Frontend Task Definition with Immutable Image Tag
+        id: render-frontend-container
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: frontend-task-definition.json
+          container-name: frontend
+          image: ${{ steps.build-frontend-image.outputs.image }}
+
+      # 8. Deploy Backend ECS Task Definition
+      - name: Deploy Backend ECS Task Definition & Wait for Stability
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render-backend-container.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
+          service: ${{ env.ECS_BACKEND_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
 
-      - name: Verify Live Deployment
+      # 9. Deploy Frontend ECS Task Definition
+      - name: Deploy Frontend ECS Task Definition & Wait for Stability
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-frontend-container.outputs.task-definition }}
+          service: ${{ env.ECS_FRONTEND_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # 10. Verify Live Deployment
+      - name: Verify Live End-to-End Deployment
         run: |
           echo "=================================================="
-          echo "  ECS (EC2) DEPLOYMENT COMPLETED & SERVICE STABLE  "
+          echo "  ECS (EC2) DUAL SERVICE DEPLOYMENT COMPLETED     "
           echo "=================================================="
-          echo "Region:   $AWS_REGION"
-          echo "Cluster:  $ECS_CLUSTER"
-          echo "Service:  $ECS_SERVICE"
-          echo "Image:    ${{ steps.build-image.outputs.image }}"
+          echo "Region:           $AWS_REGION"
+          echo "Cluster:          $ECS_CLUSTER"
+          echo "Backend Service:  $ECS_BACKEND_SERVICE"
+          echo "Frontend Service: $ECS_FRONTEND_SERVICE"
+          echo "Backend Image:    ${{ steps.build-backend-image.outputs.image }}"
+          echo "Frontend Image:   ${{ steps.build-frontend-image.outputs.image }}"
           echo ""
-          echo "--- ECS Service Deployment Status ---"
+          echo "--- Backend ECS Service Status ---"
           aws ecs describe-services \
             --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.ECS_SERVICE }} \
+            --services ${{ env.ECS_BACKEND_SERVICE }} \
             --region ${{ env.AWS_REGION }} \
-            --query "services[0].{Status:status,Desired:desiredCount,Running:runningCount,TaskDef:taskDefinition,LaunchType:launchType,CapacityProviders:capacityProviderStrategy}"
+            --query "services[0].{Status:status,Desired:desiredCount,Running:runningCount,TaskDef:taskDefinition,CapacityProviders:capacityProviderStrategy}"
+          echo ""
+          echo "--- Frontend ECS Service Status ---"
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_FRONTEND_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "services[0].{Status:status,Desired:desiredCount,Running:runningCount,TaskDef:taskDefinition,CapacityProviders:capacityProviderStrategy}"
           echo ""
           echo "--- Registered EC2 Container Instances ---"
           aws ecs list-container-instances \
             --cluster ${{ env.ECS_CLUSTER }} \
             --region ${{ env.AWS_REGION }} \
             --query "containerInstanceArns"
+          echo ""
+          echo "--- Probing ALB Endpoints ---"
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names "videotube-dev-alb" --region ${{ env.AWS_REGION }} --query "LoadBalancers[0].DNSName" --output text)
+          echo "ALB DNS: http://$ALB_DNS"
+          echo ""
+          echo "[1] Probing Frontend Root URL..."
+          curl -s -o /dev/null -w "Frontend Root HTTP Status: %{http_code}\n" "http://$ALB_DNS/"
+          echo "[2] Probing Frontend SPA Route (/auth)..."
+          curl -s -o /dev/null -w "Frontend SPA Route HTTP Status: %{http_code}\n" "http://$ALB_DNS/auth"
+          echo "[3] Probing Backend API Healthcheck..."
+          curl -s "http://$ALB_DNS/api/v1/healthcheck"
+          echo ""
+          echo "All end-to-end verification probes completed successfully!"

@@ -8,6 +8,11 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.backend.repository_url
 }
 
+output "ecr_frontend_repository_url" {
+  description = "URL of the Amazon ECR repository for frontend images"
+  value       = aws_ecr_repository.frontend.repository_url
+}
+
 output "s3_bucket_name" {
   description = "Name of the S3 media storage bucket"
   value       = aws_s3_bucket.media.bucket
@@ -24,8 +29,18 @@ output "ecs_cluster_name" {
 }
 
 output "ecs_service_name" {
-  description = "Name of the ECS service"
+  description = "Name of the backend ECS service"
   value       = aws_ecs_service.backend.name
+}
+
+output "ecs_frontend_service_name" {
+  description = "Name of the frontend ECS service"
+  value       = aws_ecs_service.frontend.name
+}
+
+output "frontend_target_group_arn" {
+  description = "ARN of the frontend ALB target group"
+  value       = aws_lb_target_group.frontend.arn
 }
 
 output "vpc_id" {
@@ -47,4 +62,3 @@ output "github_actions_role_arn" {
   description = "ARN of the IAM role assumed by GitHub Actions via OIDC"
   value       = aws_iam_role.github_actions.arn
 }
-

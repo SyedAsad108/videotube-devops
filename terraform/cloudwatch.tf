@@ -11,6 +11,15 @@ resource "aws_cloudwatch_log_group" "ecs" {
   }
 }
 
+resource "aws_cloudwatch_log_group" "ecs_frontend" {
+  name              = "/ecs/${local.name_prefix}-frontend"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${local.name_prefix}-ecs-frontend-logs"
+  }
+}
+
 # CPU Utilization Alarm
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "${local.name_prefix}-high-cpu-alarm"

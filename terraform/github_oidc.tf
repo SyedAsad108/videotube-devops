@@ -79,7 +79,10 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "ecr:DescribeRepositories",
           "ecr:ListImages"
         ]
-        Resource = aws_ecr_repository.backend.arn
+        Resource = [
+          aws_ecr_repository.backend.arn,
+          aws_ecr_repository.frontend.arn
+        ]
       },
       {
         Sid    = "ECSDeployment"
@@ -105,6 +108,16 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           aws_iam_role.ecs_execution.arn,
           aws_iam_role.ecs_task.arn
         ]
+      },
+      {
+        Sid    = "ELBDescribe"
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeTargetHealth"
+        ]
+        Resource = "*"
       }
     ]
   })
