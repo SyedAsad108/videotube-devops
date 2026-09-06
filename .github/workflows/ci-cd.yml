@@ -91,7 +91,7 @@ jobs:
         run: terraform validate
 
   # ==========================================
-  # Job 4: Build & Deploy Container to AWS ECR/ECS
+  # Job 4: Continuous Deployment to Amazon ECS
   # ==========================================
   deploy-to-aws:
     name: Build, Push & Deploy to Amazon ECS
@@ -99,51 +99,76 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
-    steps:
-      - name: Check AWS Secrets Availability
-        id: check-creds
-        env:
-          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        run: |
-          if [ -z "$AWS_KEY" ]; then
-            echo "has_creds=false" >> $GITHUB_OUTPUT
-            echo "::notice ::AWS_ACCESS_KEY_ID not found in repository secrets. Skipping cloud push & ECS deployment."
-          else
-            echo "has_creds=true" >> $GITHUB_OUTPUT
-          fi
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME || 'arn:aws:iam::027958788847:role/videotube-github-actions-role' }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'videotube-dev-backend' }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'videotube-dev-cluster' }}
+      ECS_SERVICE: ${{ vars.ECS_SERVICE || 'videotube-dev-service' }}
 
+    steps:
       - name: Checkout Code
-        if: steps.check-creds.outputs.has_creds == 'true'
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        if: steps.check-creds.outputs.has_creds == 'true'
+      - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       - name: Log in to Amazon ECR
-        if: steps.check-creds.outputs.has_creds == 'true'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, Tag & Push Backend Docker Image
-        if: steps.check-creds.outputs.has_creds == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY || 'videotube-dev-backend' }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./backend
+          echo "Building Docker image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            ./backend
+          echo "Pushing immutable image tag ($IMAGE_TAG) to Amazon ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "Pushing 'latest' image tag to Amazon ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Trigger ECS Service Deployment
-        if: steps.check-creds.outputs.has_creds == 'true'
-        env:
-          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER || 'videotube-dev-cluster' }}
-          ECS_SERVICE: ${{ secrets.ECS_SERVICE || 'videotube-dev-service' }}
+      - name: Download Active ECS Task Definition
         run: |
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --force-new-deployment
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECR_REPOSITORY }} \
+            --region ${{ env.AWS_REGION }} \
+            --query taskDefinition > task-def-raw.json
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' task-def-raw.json > task-definition.json
+
+      - name: Render New Task Definition with Immutable Image Tag & Secrets
+        id: render-backend-container
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: backend
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          environment-variables: |
+            MONGODB_URI=${{ secrets.MONGODB_URI }}
+
+      - name: Deploy Amazon ECS Task Definition & Wait for Stability
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-backend-container.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Verify Live Deployment Status
+        run: |
+          echo "=================================================="
+          echo "  ECS DEPLOYMENT COMPLETED & SERVICE IS STABLE    "
+          echo "=================================================="
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "services[0].deployments"
