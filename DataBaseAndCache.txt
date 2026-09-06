@@ -1,0 +1,779 @@
+Yes. Since you want to add this to the **main project document**, here is a polished section covering **MongoDB Atlas, ElastiCache, what each stores, and the ElastiCache node-size decision**.
+
+You can insert this as a section under your **Database and Caching Architecture**.
+
+---
+
+# Database and Caching Architecture
+
+## MongoDB Atlas and ElastiCache Responsibilities
+
+The platform uses a separation-of-responsibilities approach for data storage. Different types of data have different access patterns, sizes, persistence requirements, and performance characteristics. Therefore, the architecture does not use a single storage system for everything.
+
+The platform uses:
+
+* **MongoDB Atlas** as the primary persistent database.
+* **Amazon S3** as object storage for videos and media files.
+* **Amazon ElastiCache** as the in-memory caching layer.
+
+The relationship between these services is illustrated below:
+
+```text
+                    APPLICATION DATA
+                           │
+          ┌────────────────┼────────────────┐
+          │                │                │
+          ▼                ▼                ▼
+    MongoDB Atlas          S3          ElastiCache
+          │                │                │
+          ▼                ▼                ▼
+     Persistent Data    Media Files    Temporary Cache
+```
+
+Each service has a specific responsibility.
+
+---
+
+## MongoDB Atlas: Primary Persistent Database
+
+MongoDB Atlas is the **primary database and source of truth** for the application.
+
+All permanent application data is stored in MongoDB Atlas. If cached data is lost from ElastiCache, the application must be able to retrieve the original data from MongoDB Atlas.
+
+MongoDB Atlas stores structured application information such as:
+
+### User Data
+
+The `users` collection stores information including:
+
+* User ID
+* Username
+* Email address
+* Hashed password
+* Avatar object key
+* Cover image object key
+* Authentication-related information, where applicable
+* Account creation and update timestamps
+
+Example:
+
+```json
+{
+  "_id": "user123",
+  "username": "asad",
+  "email": "user@example.com",
+  "password": "hashed-password",
+  "avatar": "profiles/user123/avatar.jpg",
+  "coverImage": "profiles/user123/cover.jpg"
+}
+```
+
+The actual avatar and cover image files are **not stored inside MongoDB**. Only their references or S3 object keys are stored.
+
+---
+
+## Video Metadata
+
+MongoDB Atlas stores information describing a video rather than the actual video file.
+
+The `videos` collection may contain:
+
+* Video ID
+* Title
+* Description
+* S3 object key for the video
+* S3 object key for the thumbnail
+* Video duration
+* View count
+* Publication status
+* Owner ID
+* Creation timestamp
+* Update timestamp
+
+Example:
+
+```json
+{
+  "_id": "video123",
+  "title": "Introduction to AWS",
+  "description": "An introduction to AWS architecture",
+  "videoFile": "videos/user123/video123.mp4",
+  "thumbnail": "thumbnails/video123.jpg",
+  "duration": 620,
+  "views": 1540,
+  "isPublished": true,
+  "owner": "user123"
+}
+```
+
+### Why store an S3 object key instead of the actual video?
+
+Video files can be hundreds of megabytes or even multiple gigabytes in size. Storing such files directly in the database would create unnecessary storage and performance problems.
+
+Instead:
+
+```text
+MongoDB Atlas
+      │
+      │ Stores metadata and object reference
+      ▼
+S3 Object Key
+      │
+      ▼
+Actual Video File in Amazon S3
+```
+
+The recommended design is to store the **S3 object key** rather than permanently storing a complete CloudFront or S3 URL.
+
+For example:
+
+```text
+videos/user123/video123.mp4
+```
+
+This keeps the database independent from the delivery infrastructure. If the CloudFront distribution or domain changes in the future, the database records do not need to be updated.
+
+---
+
+## Additional Application Collections
+
+Depending on the final scope of the platform, MongoDB Atlas may also store:
+
+### Subscriptions
+
+```text
+Subscriber → Channel relationship
+```
+
+Example:
+
+```json
+{
+  "subscriber": "user123",
+  "channel": "user456"
+}
+```
+
+### Comments
+
+```json
+{
+  "video": "video123",
+  "owner": "user456",
+  "content": "Great video!"
+}
+```
+
+### Likes
+
+Information representing which users have liked specific videos.
+
+### Playlists
+
+User-created collections of videos.
+
+These features are secondary to the core platform functionality and should be implemented according to the project's available development time.
+
+---
+
+# Amazon S3: Media Object Storage
+
+Amazon S3 stores the actual media files used by the application.
+
+These include:
+
+```text
+S3 Bucket
+│
+├── videos/
+│   ├── video-123.mp4
+│   └── video-456.mp4
+│
+├── thumbnails/
+│   ├── thumbnail-123.jpg
+│   └── thumbnail-456.jpg
+│
+└── profiles/
+    ├── user-123-avatar.jpg
+    └── user-456-avatar.jpg
+```
+
+The primary reason for using S3 is that the backend should not be responsible for permanently storing large media files on the EC2 instance running the ECS infrastructure.
+
+This is particularly important because the EC2 infrastructure can be replaced, restarted, or scaled.
+
+The architecture therefore treats compute and storage separately:
+
+```text
+ECS Backend
+    │
+    ├── Can restart
+    ├── Can be replaced
+    └── Can scale
+            │
+            ▼
+      Persistent files remain
+            │
+            ▼
+           S3
+```
+
+---
+
+# Amazon ElastiCache: Application Caching Layer
+
+Amazon ElastiCache provides an in-memory caching layer.
+
+ElastiCache is **not the primary database**.
+
+It stores temporary copies of frequently accessed data to reduce repeated queries to MongoDB Atlas.
+
+The primary reason for introducing ElastiCache into the architecture is to reduce pressure on MongoDB Atlas during repeated, read-heavy traffic.
+
+This is especially relevant because the project may use a smaller MongoDB Atlas tier, which could become a bottleneck during aggressive load testing.
+
+The caching layer allows frequently requested information to be served without repeatedly querying the primary database.
+
+---
+
+## What ElastiCache Will Store
+
+The initial implementation of ElastiCache will focus primarily on **database query caching**.
+
+### Video Listing Cache
+
+For example:
+
+```text
+GET /api/v1/videos?page=1
+```
+
+The backend may cache the response using a key such as:
+
+```text
+videos:page:1
+```
+
+The cached value may contain the video metadata returned to the frontend.
+
+Example:
+
+```json
+[
+  {
+    "id": "video123",
+    "title": "Introduction to AWS",
+    "thumbnail": "thumbnails/video123.jpg",
+    "views": 1540
+  }
+]
+```
+
+---
+
+### Popular Videos Cache
+
+Frequently requested popular videos can be cached under a key such as:
+
+```text
+videos:popular
+```
+
+This prevents the application from repeatedly executing the same database query.
+
+---
+
+### Individual Video Metadata Cache
+
+For an endpoint such as:
+
+```text
+GET /api/v1/videos/:videoId
+```
+
+the backend may use a cache key such as:
+
+```text
+video:video123
+```
+
+The cache can contain frequently requested metadata for that video.
+
+---
+
+## What ElastiCache Will NOT Store
+
+ElastiCache will not store:
+
+* Actual video files
+* Large media files
+* Permanent source-of-truth data
+* Primary copies of user data
+
+The actual videos remain in S3.
+
+The permanent application records remain in MongoDB Atlas.
+
+ElastiCache only stores temporary data.
+
+---
+
+# Cache-Aside Pattern
+
+The platform will use the **Cache-Aside pattern** for cached API responses.
+
+The request flow works as follows.
+
+### Step 1: Client requests data
+
+```text
+Frontend
+    │
+    ▼
+Application Load Balancer
+    │
+    ▼
+ECS Backend
+```
+
+### Step 2: Backend checks ElastiCache
+
+```text
+ECS Backend
+     │
+     ▼
+ElastiCache
+```
+
+### Scenario A: Cache Hit
+
+If the requested data exists in the cache:
+
+```text
+ElastiCache
+      │
+      ▼
+Cache HIT
+      │
+      ▼
+Backend returns cached data
+      │
+      ▼
+Frontend
+```
+
+MongoDB Atlas is not queried.
+
+---
+
+### Scenario B: Cache Miss
+
+If the data does not exist in the cache:
+
+```text
+ElastiCache
+      │
+      ▼
+Cache MISS
+      │
+      ▼
+MongoDB Atlas
+      │
+      ▼
+Fetch required data
+      │
+      ▼
+Store temporary copy in ElastiCache
+      │
+      ▼
+Return response to frontend
+```
+
+This architecture reduces repeated database queries for frequently accessed information.
+
+---
+
+# Cache Expiration and TTL
+
+Cached data should not remain in ElastiCache indefinitely.
+
+Each cached entry will use a **TTL (Time To Live)**.
+
+For example:
+
+```text
+videos:page:1
+
+TTL: 60 seconds to 5 minutes
+```
+
+The exact TTL can vary depending on the data.
+
+Example strategy:
+
+| Data                      | Suggested Initial TTL |
+| ------------------------- | --------------------: |
+| Video listing             |           1–5 minutes |
+| Popular videos            |             5 minutes |
+| Individual video metadata |           1–5 minutes |
+| Search results            |           1–2 minutes |
+
+These values can later be adjusted based on observed cache hit rates and application behaviour.
+
+---
+
+# Cache Failure Strategy
+
+ElastiCache should not become a critical dependency that causes the entire application to fail.
+
+If the cache becomes unavailable, the backend should gracefully fall back to MongoDB Atlas.
+
+```text
+Request
+   │
+   ▼
+ElastiCache
+   │
+   ├── Available → Use cache
+   │
+   └── Unavailable
+          │
+          ▼
+      MongoDB Atlas
+          │
+          ▼
+      Return data
+```
+
+This ensures that ElastiCache improves performance but does not become the application's only source of data.
+
+The cache is therefore considered an **optimization layer**, not a source of truth.
+
+---
+
+# ElastiCache Node Size Strategy
+
+## Initial Design Decision
+
+The project will **not select a fixed ElastiCache node size during the architecture design phase**.
+
+Instead, the node size will be selected during infrastructure deployment after reviewing:
+
+* The AWS Region being used.
+* The remaining AWS Free Tier credits.
+* The ElastiCache options available to the specific AWS account.
+* The hourly cost of available node types.
+* The actual cache memory requirements observed during testing.
+
+The project does not require a large cache because the application will initially cache only relatively small JSON-based API responses and metadata.
+
+It will **not cache video files**.
+
+Therefore, the expected cache memory requirements are relatively small.
+
+---
+
+## Recommended Node Sizing Approach
+
+The initial deployment should use:
+
+> **The smallest suitable provisioned ElastiCache node available to the AWS account and selected Region, provided that its cost remains within the project's available AWS credits.**
+
+The architecture should initially use:
+
+```text
+Number of Cache Nodes: 1
+
+Purpose:
+Application-level caching
+
+Cached Data:
+Video listings
+Popular videos
+Frequently accessed video metadata
+
+Location:
+Private subnet
+
+Network Access:
+Restricted to ECS tasks
+
+Persistence:
+Cache data is disposable
+
+Failure Behaviour:
+Application falls back to MongoDB Atlas
+```
+
+A single-node cache is sufficient for the initial project implementation because the primary objective is to demonstrate:
+
+* Distributed caching
+* Reduced database load
+* Improved response times for repeated requests
+* Cache hit and cache miss behaviour
+* Infrastructure integration using Terraform
+* Performance benchmarking using k6
+
+The objective is **not to build a production-scale multi-node Redis cluster**.
+
+---
+
+# Why Not Choose a Large ElastiCache Node?
+
+The platform is not expected to store large data inside the cache.
+
+For example:
+
+```text
+Actual Video
+      │
+      ▼
+S3
+
+Video Metadata
+      │
+      ├── Permanent copy → MongoDB Atlas
+      │
+      └── Temporary copy → ElastiCache
+```
+
+Therefore, selecting a large cache instance would introduce unnecessary cost without providing meaningful benefits for the project.
+
+The project should follow a **measure-first approach**:
+
+```text
+Start Small
+     │
+     ▼
+Deploy
+     │
+     ▼
+Run Application
+     │
+     ▼
+Generate Load with k6
+     │
+     ▼
+Monitor Cache Metrics
+     │
+     ▼
+Evaluate Memory Usage and Performance
+     │
+     ▼
+Resize Only If Required
+```
+
+---
+
+# ElastiCache Placement in the Architecture
+
+ElastiCache will be deployed inside the AWS VPC and will not be publicly accessible.
+
+The networking architecture will be:
+
+```text
+                        INTERNET
+                            │
+                            ▼
+                    Application Load Balancer
+                       Public Subnets
+                            │
+              ┌─────────────┴─────────────┐
+              │                           │
+              ▼                           ▼
+
+       Availability Zone A          Availability Zone B
+              │                           │
+       Private Application          Private Application
+           Subnet                       Subnet
+              │                           │
+              ▼                           ▼
+
+          ECS Task                    ECS Task
+        Node.js Backend             Node.js Backend
+              │                           │
+              └─────────────┬─────────────┘
+                            │
+                            ▼
+                     ElastiCache
+                    Private Network
+                            │
+                            ▼
+                     MongoDB Atlas
+```
+
+Only the backend application should be allowed to communicate with ElastiCache.
+
+The security group configuration should enforce:
+
+```text
+Internet
+    ✗
+    │
+    │ Cannot access
+    ▼
+ElastiCache
+
+
+ECS Backend
+    ✓
+    │
+    │ Allowed
+    ▼
+ElastiCache
+```
+
+---
+
+# Relationship Between MongoDB Atlas and ElastiCache
+
+The following distinction is fundamental to the architecture:
+
+| Service       | Responsibility   | Data Type                                    |
+| ------------- | ---------------- | -------------------------------------------- |
+| MongoDB Atlas | Primary database | Permanent application data                   |
+| Amazon S3     | Object storage   | Actual videos and media                      |
+| ElastiCache   | Cache            | Temporary copies of frequently accessed data |
+
+In simple terms:
+
+> **MongoDB Atlas knows what the video is.**
+
+It stores:
+
+```text
+Title
+Description
+Owner
+Views
+S3 Object Key
+Publication Status
+```
+
+> **Amazon S3 stores the actual video.**
+
+It stores:
+
+```text
+video.mp4
+thumbnail.jpg
+avatar.png
+```
+
+> **ElastiCache remembers frequently requested information temporarily.**
+
+It stores:
+
+```text
+Frequently accessed video lists
+Popular videos
+Video metadata
+Repeated query results
+```
+
+---
+
+# Performance Benchmarking Objective
+
+ElastiCache provides an additional measurable performance dimension for the project.
+
+The application can be tested under two conditions.
+
+## Test A: Caching Disabled
+
+```text
+k6 Load Test
+      │
+      ▼
+ECS Backend
+      │
+      ▼
+MongoDB Atlas
+```
+
+Measurements can include:
+
+* Response latency
+* Requests per second
+* MongoDB request volume
+* Backend CPU utilization
+* Error rate
+
+---
+
+## Test B: Caching Enabled
+
+```text
+k6 Load Test
+      │
+      ▼
+ECS Backend
+      │
+      ▼
+ElastiCache
+      │
+      ├── Cache Hit → Return cached response
+      │
+      └── Cache Miss → MongoDB Atlas
+```
+
+Measurements can include:
+
+* Cache hit rate
+* Response latency
+* Requests per second
+* Backend CPU utilization
+* Database query reduction
+* Error rate
+
+This provides a concrete engineering demonstration of the value of caching.
+
+The project can therefore demonstrate not merely that ElastiCache has been added to the architecture, but that:
+
+> **Under repeated read-heavy traffic, frequently requested video metadata and listings can be served from the caching layer, reducing repeated load on MongoDB Atlas and potentially improving application response times.**
+
+---
+
+## Final ElastiCache Design Decision
+
+The final design for the initial version of the project is:
+
+```text
+ElastiCache
+│
+├── Engine: Redis-compatible caching
+│
+├── Deployment:
+│   Smallest suitable provisioned node available
+│   within the AWS account and credit constraints
+│
+├── Initial Nodes:
+│   1
+│
+├── Location:
+│   Private subnet within the VPC
+│
+├── Access:
+│   Restricted to ECS backend tasks
+│
+├── Primary Use:
+│   Database query caching
+│
+├── Cached Data:
+│   • Video feeds
+│   • Popular videos
+│   • Video metadata
+│
+├── Does NOT Store:
+│   • Video files
+│   • Permanent application data
+│
+└── Failure Behaviour:
+    Fall back to MongoDB Atlas
+```
+
+### Important Future Decision
+
+The **exact node type and size will be finalized immediately before Terraform deployment**, based on the current options and pricing shown in the AWS account for the selected region.
+
+This avoids hardcoding an infrastructure choice based on assumptions about pricing or service availability while still keeping the architectural design clear.

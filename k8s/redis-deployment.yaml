@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: videotube-redis
+  namespace: videotube
+  labels:
+    app: videotube-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: videotube-redis
+  template:
+    metadata:
+      labels:
+        app: videotube-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+              name: redis
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: videotube-redis-service
+  namespace: videotube
+  labels:
+    app: videotube-redis
+spec:
+  type: ClusterIP
+  selector:
+    app: videotube-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis

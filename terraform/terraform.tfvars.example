@@ -1,0 +1,21 @@
+# ==========================================
+# VideoTube Terraform Deployment Variables
+# Copy to terraform.tfvars and fill values
+# ==========================================
+
+aws_region           = "us-east-1"
+project_name         = "videotube"
+environment          = "dev"
+
+# Database & Cache Configuration
+mongodb_uri          = "mongodb+srv://<db_user>:<db_password>@cluster0.example.mongodb.net/videotube?retryWrites=true&w=majority"
+elasticache_node_type = "cache.t3.micro"
+
+# JWT Secrets
+jwt_access_secret    = "videotube_production_access_secret_sample_key_998877"
+jwt_refresh_secret   = "videotube_production_refresh_secret_sample_key_998877"
+
+# Sizing & Capacity
+asg_min_size         = 1
+asg_desired_capacity = 1
+asg_max_size         = 2

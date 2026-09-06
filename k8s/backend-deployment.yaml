@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: videotube-backend
+  namespace: videotube
+  labels:
+    app: videotube-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: videotube-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: videotube-backend
+    spec:
+      containers:
+        - name: backend
+          image: videotube-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: videotube-config
+            - secretRef:
+                name: videotube-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /api/v1/healthcheck
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthcheck
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: videotube-backend-service
+  namespace: videotube
+  labels:
+    app: videotube-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: videotube-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http

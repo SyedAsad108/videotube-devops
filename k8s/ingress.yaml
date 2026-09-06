@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: videotube-ingress
+  namespace: videotube
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+    - http:
+        paths:
+          # Route REST API traffic to backend container
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: videotube-backend-service
+                port:
+                  number: 8000
+          # Route web client traffic to frontend Nginx container
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: videotube-frontend-service
+                port:
+                  number: 80

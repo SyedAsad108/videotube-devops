@@ -1,0 +1,30 @@
+# Root .gitignore
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+
+# Backend uploads & builds
+backend/public/temp/*
+!backend/public/temp/.gitkeep
+backend/node_modules/
+backend/dist/
+
+# Frontend builds
+frontend/node_modules/
+frontend/dist/
+
+# Terraform state & cache
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# IDE
+.vscode/
+.idea/
