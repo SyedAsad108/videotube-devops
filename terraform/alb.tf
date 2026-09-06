@@ -16,13 +16,13 @@ resource "aws_lb" "main" {
   }
 }
 
-# Target Group routing to ECS tasks
+# Target Group routing to ECS tasks on EC2
 resource "aws_lb_target_group" "backend" {
   name        = "${local.name_prefix}-tg"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
-  target_type = "ip"
+  target_type = "instance"   # EC2 bridge mode requires "instance", not "ip" (which is Fargate/awsvpc)
 
   health_check {
     enabled             = true

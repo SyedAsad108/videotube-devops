@@ -1,9 +1,20 @@
 # ==========================================
 # GitHub Actions OIDC Provider & Deployment Role
+# Region: ap-south-1
 # ==========================================
 
-data "aws_iam_openid_connect_provider" "github" {
+# GitHub Actions OIDC Provider (global IAM resource)
+resource "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
+
+  # GitHub's OIDC audience for AWS
+  client_id_list = ["sts.amazonaws.com"]
+
+  # GitHub's OIDC thumbprints (current as of 2025)
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "1c5876126b3048e29be0a75179a046f044963d00"
+  ]
 }
 
 # IAM Role assumed by GitHub Actions via OIDC
@@ -16,7 +27,7 @@ resource "aws_iam_role" "github_actions" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = data.aws_iam_openid_connect_provider.github.arn
+          Federated = aws_iam_openid_connect_provider.github.arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
@@ -40,7 +51,7 @@ resource "aws_iam_role" "github_actions" {
   }
 }
 
-# Policy allowing GitHub Actions to push images to ECR and update ECS services
+# Policy: allows GitHub Actions to push images to ECR and update ECS
 resource "aws_iam_role_policy" "github_actions_deploy" {
   name = "VideoTubeGitHubActionsDeploymentPolicy"
   role = aws_iam_role.github_actions.id

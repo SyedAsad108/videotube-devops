@@ -1,6 +1,10 @@
 # ==========================================
 # VPC & Subnet Networking Infrastructure
 # ==========================================
+#
+# Architecture: EC2 instances in PUBLIC subnets with public IPs
+# This eliminates the NAT Gateway (~$32/month) while maintaining
+# security via security groups. EC2 nodes pull ECR images directly.
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -21,7 +25,7 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# Public Subnets (2 AZs for High Availability ALB)
+# Public Subnets (2 AZs — ALB requires 2, EC2 instances also placed here)
 resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[0]
@@ -46,7 +50,7 @@ resource "aws_subnet" "public_b" {
   }
 }
 
-# Private Subnets (2 AZs for ECS Compute and ElastiCache)
+# Private Subnets (retained for ElastiCache isolation)
 resource "aws_subnet" "private_a" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[0]
@@ -67,28 +71,6 @@ resource "aws_subnet" "private_b" {
     Name = "${local.name_prefix}-private-subnet-b"
     Tier = "Private"
   }
-}
-
-# Elastic IP for NAT Gateway
-resource "aws_eip" "nat" {
-  domain     = "vpc"
-  depends_on = [aws_internet_gateway.igw]
-
-  tags = {
-    Name = "${local.name_prefix}-nat-eip"
-  }
-}
-
-# Single NAT Gateway in Public Subnet A for outbound private subnet access
-resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public_a.id
-
-  tags = {
-    Name = "${local.name_prefix}-nat-gateway"
-  }
-
-  depends_on = [aws_internet_gateway.igw]
 }
 
 # Route Table for Public Subnets -> Internet Gateway
@@ -115,14 +97,9 @@ resource "aws_route_table_association" "public_b" {
   route_table_id = aws_route_table.public.id
 }
 
-# Route Table for Private Subnets -> NAT Gateway
+# Route Table for Private Subnets (local only — ElastiCache is accessed from EC2 within VPC)
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat.id
-  }
 
   tags = {
     Name = "${local.name_prefix}-private-rt"

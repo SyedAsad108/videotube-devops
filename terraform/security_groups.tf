@@ -29,14 +29,24 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# 2. ECS Tasks / EC2 Nodes Security Group
+# 2. ECS EC2 Nodes Security Group
 resource "aws_security_group" "ecs" {
   name        = "${local.name_prefix}-ecs-sg"
-  description = "Allows traffic only from ALB to ECS containers and outbound to internet via NAT"
+  description = "Allows traffic from ALB to EC2 ECS nodes (container port + ephemeral ports for bridge mode)"
   vpc_id      = aws_vpc.main.id
 
+  # EC2 bridge mode maps container ports to random ephemeral host ports (32768-65535)
+  # The ALB connects to these dynamic host ports on the EC2 instance
   ingress {
-    description     = "Allow HTTP traffic on container port from ALB only"
+    description     = "Allow ALB to reach containers on all ephemeral host ports (bridge mode dynamic port mapping)"
+    from_port       = 32768
+    to_port         = 65535
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "Allow ALB to reach containers on the container port directly"
     from_port       = var.container_port
     to_port         = var.container_port
     protocol        = "tcp"
@@ -44,7 +54,7 @@ resource "aws_security_group" "ecs" {
   }
 
   egress {
-    description = "Allow outbound internet access (via NAT Gateway) for MongoDB Atlas & AWS S3"
+    description = "Allow all outbound (ECR image pull, MongoDB Atlas, AWS APIs via public internet)"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

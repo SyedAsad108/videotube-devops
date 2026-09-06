@@ -32,3 +32,19 @@ output "vpc_id" {
   description = "ID of the VPC"
   value       = aws_vpc.main.id
 }
+
+output "ecs_capacity_provider" {
+  description = "Name of the ECS EC2 capacity provider"
+  value       = aws_ecs_capacity_provider.ec2.name
+}
+
+output "autoscaling_group_name" {
+  description = "Name of the EC2 Auto Scaling Group backing ECS"
+  value       = aws_autoscaling_group.ecs.name
+}
+
+output "github_actions_role_arn" {
+  description = "ARN of the IAM role assumed by GitHub Actions via OIDC"
+  value       = aws_iam_role.github_actions.arn
+}
+
