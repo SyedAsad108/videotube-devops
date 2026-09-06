@@ -90,7 +90,10 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "ecs:DescribeTaskDefinition",
           "ecs:RegisterTaskDefinition",
           "ecs:DescribeTasks",
-          "ecs:ListTasks"
+          "ecs:ListTasks",
+          "ecs:DescribeClusters",
+          "ecs:ListContainerInstances",
+          "ecs:DescribeContainerInstances"
         ]
         Resource = "*"
       },
