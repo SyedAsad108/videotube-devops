@@ -138,7 +138,71 @@ jobs:
         run: terraform validate
 
   # ==========================================
-  # Job 5: Backend Continuous Deployment (Amazon ECS / EC2)
+  # Job 5: Frontend Static Deployment (S3 + CloudFront)
+  # Independent, fast deployment (~30s) directly to S3 with cache invalidation
+  # Completely eliminates frontend Docker build and ECS container deployment
+  # ==========================================
+  deploy-frontend:
+    name: Deploy Frontend to S3 & Invalidate CloudFront
+    needs: [detect-changes, build-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.outputs.frontend == 'true'
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+      ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+      FRONTEND_S3_BUCKET: ${{ vars.FRONTEND_S3_BUCKET || 'videotube-dev-frontend-5f087aba' }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Compiled Frontend Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: ./frontend/dist
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Sync Hashed Static Assets to S3 (1-Year Immutable Cache)
+        run: |
+          echo "Syncing hashed JavaScript, CSS, and images with long-term immutable caching..."
+          aws s3 sync ./frontend/dist s3://${{ env.FRONTEND_S3_BUCKET }} \
+            --exclude "index.html" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --delete
+
+      - name: Upload HTML Entry Point to S3 (No-Cache Revalidation)
+        run: |
+          echo "Uploading index.html with no-cache revalidation headers..."
+          aws s3 cp ./frontend/dist/index.html s3://${{ env.FRONTEND_S3_BUCKET }}/index.html \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront Cache (Selective /index.html)
+        run: |
+          if [ -n "${{ env.CLOUDFRONT_DISTRIBUTION_ID }}" ] && [ "${{ env.CLOUDFRONT_DISTRIBUTION_ID }}" != "pending-account-verification" ]; then
+            echo "Creating targeted CloudFront invalidation for /index.html..."
+            aws cloudfront create-invalidation \
+              --distribution-id "${{ env.CLOUDFRONT_DISTRIBUTION_ID }}" \
+              --paths "/index.html"
+          else
+            echo "CloudFront distribution ID not configured or pending; skipping invalidation."
+          fi
+
+      - name: Verify S3 Deployment Status
+        run: |
+          echo "Listing deployed files in S3 frontend bucket:"
+          aws s3 ls s3://${{ env.FRONTEND_S3_BUCKET }}/ --recursive
+
+  # ==========================================
+  # Job 6: Backend Continuous Deployment (Amazon ECS / EC2)
   # Independent backend pipeline: Docker build -> ECR push -> ECS rolling deploy
   # ==========================================
   deploy-backend:
@@ -228,147 +292,3 @@ jobs:
           curl -s "http://$ALB_DNS/api/v1/healthcheck"
           echo ""
           echo "Backend deployment and verification completed successfully!"
-
-  # ==========================================
-  # Job 6: Frontend Dual-Deployment (S3 Static Hosting + ECS Container for ALB)
-  # 1. Syncs compiled SPA to S3 with immutable caching & invalidates CloudFront
-  # 2. Builds Docker image, pushes to ECR, and deploys rolling update to ECS
-  # Sequenced after deploy-backend (or starts immediately if backend is skipped)
-  # to eliminate memory contention on the single EC2 host (t3.micro).
-  # ==========================================
-  deploy-frontend:
-    name: Deploy Frontend (ECS Container & S3 Bucket)
-    needs: [detect-changes, build-frontend, deploy-backend]
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.detect-changes.result == 'success' &&
-      needs.build-frontend.result == 'success' &&
-      needs.deploy-backend.result != 'failure' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.detect-changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
-      ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
-      FRONTEND_S3_BUCKET: ${{ vars.FRONTEND_S3_BUCKET || 'videotube-dev-frontend-5f087aba' }}
-      CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
-      ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'videotube-dev-cluster' }}
-      ECR_FRONTEND_REPOSITORY: ${{ vars.ECR_FRONTEND_REPOSITORY || 'videotube-dev-frontend' }}
-      ECS_FRONTEND_SERVICE: ${{ vars.ECS_FRONTEND_SERVICE || 'videotube-dev-frontend-service' }}
-      FRONTEND_TASK_FAMILY: "videotube-dev-frontend"
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download Compiled Frontend Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: ./frontend/dist
-
-      - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-          audience: sts.amazonaws.com
-
-      # Part A: S3 & CloudFront Deployment
-      - name: Sync Hashed Static Assets to S3 (1-Year Immutable Cache)
-        run: |
-          echo "Syncing hashed JavaScript, CSS, and images with long-term immutable caching..."
-          aws s3 sync ./frontend/dist s3://${{ env.FRONTEND_S3_BUCKET }} \
-            --exclude "index.html" \
-            --cache-control "public, max-age=31536000, immutable" \
-            --delete
-
-      - name: Upload HTML Entry Point to S3 (No-Cache Revalidation)
-        run: |
-          echo "Uploading index.html with no-cache revalidation headers..."
-          aws s3 cp ./frontend/dist/index.html s3://${{ env.FRONTEND_S3_BUCKET }}/index.html \
-            --cache-control "no-cache, no-store, must-revalidate"
-
-      - name: Invalidate CloudFront Cache (Selective /index.html)
-        run: |
-          if [ -n "${{ env.CLOUDFRONT_DISTRIBUTION_ID }}" ] && [ "${{ env.CLOUDFRONT_DISTRIBUTION_ID }}" != "pending-account-verification" ]; then
-            echo "Creating targeted CloudFront invalidation for /index.html..."
-            aws cloudfront create-invalidation \
-              --distribution-id "${{ env.CLOUDFRONT_DISTRIBUTION_ID }}" \
-              --paths "/index.html"
-          else
-            echo "CloudFront distribution ID not configured or pending; skipping invalidation."
-          fi
-
-      - name: Verify S3 Deployment Status
-        run: |
-          echo "Listing deployed files in S3 frontend bucket:"
-          aws s3 ls s3://${{ env.FRONTEND_S3_BUCKET }}/ --recursive
-
-      # Part B: Amazon ECS Container Deployment (For ALB traffic)
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, Tag & Push Frontend Docker Image
-        id: build-frontend-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          echo "Building Frontend Docker image: $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG"
-          docker build \
-            -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest \
-            ./frontend
-          echo "Pushing immutable frontend tag ($IMAGE_TAG)..."
-          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG
-          echo "Pushing frontend 'latest' tag..."
-          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Download Active Frontend Task Definition
-        run: |
-          echo "Downloading Frontend Task Definition..."
-          aws ecs describe-task-definition \
-            --task-definition ${{ env.FRONTEND_TASK_FAMILY }} \
-            --region ${{ env.AWS_REGION }} \
-            --query taskDefinition > frontend-task-def-raw.json
-          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' frontend-task-def-raw.json > frontend-task-definition.json
-
-      - name: Render New Frontend Task Definition
-        id: render-frontend-container
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: frontend-task-definition.json
-          container-name: frontend
-          image: ${{ steps.build-frontend-image.outputs.image }}
-
-      - name: Deploy Frontend ECS Task Definition & Wait for Stability
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.render-frontend-container.outputs.task-definition }}
-          service: ${{ env.ECS_FRONTEND_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
-
-      - name: Verify Live Frontend Endpoints
-        run: |
-          echo "--- Frontend ECS Service Status ---"
-          aws ecs describe-services \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.ECS_FRONTEND_SERVICE }} \
-            --region ${{ env.AWS_REGION }} \
-            --query "services[0].{Status:status,Desired:desiredCount,Running:runningCount,TaskDef:taskDefinition}"
-          echo ""
-          ALB_DNS=$(aws elbv2 describe-load-balancers --names "videotube-dev-alb" --region ${{ env.AWS_REGION }} --query "LoadBalancers[0].DNSName" --output text)
-          echo "ALB DNS: http://$ALB_DNS"
-          echo "Testing Frontend Root on http://$ALB_DNS/ ..."
-          curl -s -o /dev/null -w "Frontend Root HTTP Status: %{http_code}\n" "http://$ALB_DNS/"
-          echo "Testing Frontend SPA Route on http://$ALB_DNS/auth ..."
-          curl -s -o /dev/null -w "Frontend SPA Route HTTP Status: %{http_code}\n" "http://$ALB_DNS/auth"
-          echo ""
-          echo "Frontend deployment and verification completed successfully!"
