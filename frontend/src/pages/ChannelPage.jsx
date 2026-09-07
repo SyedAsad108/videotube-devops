@@ -58,6 +58,30 @@ const ChannelPage = () => {
         }
     };
 
+    const [videoToDelete, setVideoToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const isOwner = Boolean(user && channel && (user._id === channel._id || user.username === channel.username));
+
+    const handleDeleteVideo = (targetVideoId) => {
+        setVideoToDelete(targetVideoId);
+    };
+
+    const confirmDeleteFromModal = async () => {
+        if (!videoToDelete) return;
+        try {
+            setIsDeleting(true);
+            await API.delete(`/videos/${videoToDelete}`);
+            setVideos((prev) => prev.filter((v) => v._id !== videoToDelete));
+            setVideoToDelete(null);
+        } catch (err) {
+            console.error("Failed to delete video:", err);
+            alert(err.response?.data?.message || "Failed to delete video");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     if (loading) {
         return (
             <div style={{ display: "flex", justifyContent: "center", padding: "100px 0" }}>
@@ -140,7 +164,12 @@ const ChannelPage = () => {
             {videos.length > 0 ? (
                 <div className="video-grid">
                     {videos.map((video) => (
-                        <VideoCard key={video._id} video={video} />
+                        <VideoCard
+                            key={video._id}
+                            video={video}
+                            isOwner={isOwner}
+                            onDelete={handleDeleteVideo}
+                        />
                     ))}
                 </div>
             ) : (
@@ -159,6 +188,61 @@ const ChannelPage = () => {
                 >
                     <VideoIcon size={36} color="var(--text-muted)" />
                     <p style={{ color: "var(--text-secondary)" }}>This channel has not uploaded any videos yet.</p>
+                </div>
+            )}
+
+            {/* Video Deletion Confirmation Modal */}
+            {videoToDelete && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(0, 0, 0, 0.75)",
+                        backdropFilter: "blur(4px)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 9999
+                    }}
+                    onClick={() => setVideoToDelete(null)}
+                >
+                    <div
+                        style={{
+                            background: "var(--bg-card, #18181b)",
+                            border: "1px solid var(--border-color, #27272a)",
+                            borderRadius: "var(--radius-lg, 12px)",
+                            padding: "24px",
+                            maxWidth: "400px",
+                            width: "90%",
+                            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)"
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 style={{ marginBottom: "10px", fontSize: "1.2rem" }}>Delete Video?</h3>
+                        <p style={{ color: "var(--text-secondary, #a1a1aa)", fontSize: "0.95rem", marginBottom: "20px" }}>
+                            Are you sure you want to permanently delete this video? This action will remove the video, comments, and media files from S3.
+                        </p>
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                            <button
+                                className="btn btn-secondary"
+                                onClick={() => setVideoToDelete(null)}
+                                disabled={isDeleting}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={confirmDeleteFromModal}
+                                disabled={isDeleting}
+                                style={{ background: "#ef4444", borderColor: "#ef4444" }}
+                            >
+                                {isDeleting ? "Deleting..." : "Yes, Delete"}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

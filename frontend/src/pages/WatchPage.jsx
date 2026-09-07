@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import API from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import VideoCard from "../components/VideoCard.jsx";
-import { ThumbsUp, Bell, MessageSquare, Send, Loader2, Share2, Check } from "lucide-react";
+import { ThumbsUp, Bell, MessageSquare, Send, Loader2, Share2, Check, Trash2 } from "lucide-react";
 
 const WatchPage = () => {
     const { videoId } = useParams();
     const { user } = useAuth();
+    const navigate = useNavigate();
 
     const [video, setVideo] = useState(null);
     const [relatedVideos, setRelatedVideos] = useState([]);
@@ -16,6 +17,20 @@ const WatchPage = () => {
     const [loading, setLoading] = useState(true);
     const [commentSubmitting, setCommentSubmitting] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
+
+    const fetchComments = async () => {
+        try {
+            const commentsRes = await API.get(`/comments/${videoId}`);
+            const data = commentsRes.data?.data;
+            const commentList = Array.isArray(data) ? data : (data?.docs || []);
+            setComments(commentList);
+        } catch (err) {
+            console.error("Failed to load comments:", err);
+            setComments([]);
+        }
+    };
 
     const fetchVideoDetails = async () => {
         try {
@@ -23,15 +38,18 @@ const WatchPage = () => {
             const res = await API.get(`/videos/${videoId}`);
             setVideo(res.data?.data);
 
-            // Fetch comments
-            const commentsRes = await API.get(`/comments/${videoId}`);
-            setComments(commentsRes.data?.data?.docs || []);
+            // Fetch comments independently
+            fetchComments();
 
-            // Fetch related videos
-            const relatedRes = await API.get("/videos", { params: { limit: 8 } });
-            setRelatedVideos(
-                (relatedRes.data?.data?.docs || []).filter((v) => v._id !== videoId)
-            );
+            // Fetch related videos independently
+            try {
+                const relatedRes = await API.get("/videos", { params: { limit: 8 } });
+                setRelatedVideos(
+                    (relatedRes.data?.data?.docs || []).filter((v) => v._id !== videoId)
+                );
+            } catch (relErr) {
+                console.warn("Failed to load related videos:", relErr);
+            }
         } catch (error) {
             console.error("Failed to load video details:", error);
         } finally {
@@ -52,14 +70,33 @@ const WatchPage = () => {
 
         try {
             const res = await API.post(`/likes/toggle/v/${videoId}`);
-            const isLiked = res.data?.data?.isLiked;
+            const data = res.data?.data;
+            const newIsLiked = data?.isLiked;
+            const newCount = typeof data?.likesCount === "number"
+                ? data.likesCount
+                : (newIsLiked ? (video.likesCount || 0) + 1 : Math.max(0, (video.likesCount || 1) - 1));
+
             setVideo((prev) => ({
                 ...prev,
-                isLiked,
-                likesCount: isLiked ? (prev.likesCount || 0) + 1 : Math.max(0, (prev.likesCount || 1) - 1)
+                isLiked: newIsLiked,
+                likesCount: newCount
             }));
         } catch (error) {
             console.error("Failed to toggle like:", error);
+            alert("Failed to update like status.");
+        }
+    };
+
+    const handleDeleteVideo = async () => {
+        try {
+            setIsDeleting(true);
+            await API.delete(`/videos/${videoId}`);
+            navigate(user?.username ? `/c/${user.username}` : "/");
+        } catch (err) {
+            console.error("Failed to delete video:", err);
+            alert(err.response?.data?.message || "Failed to delete video");
+            setIsDeleting(false);
+            setConfirmDelete(false);
         }
     };
 
@@ -105,10 +142,13 @@ const WatchPage = () => {
             setCommentSubmitting(true);
             const res = await API.post(`/comments/${videoId}`, { content: commentText.trim() });
             const newComment = res.data?.data;
-            setComments((prev) => [newComment, ...prev]);
-            setCommentText("");
+            if (newComment) {
+                setComments((prev) => [newComment, ...prev]);
+                setCommentText("");
+            }
         } catch (error) {
             console.error("Failed to post comment:", error);
+            alert(error.response?.data?.message || "Failed to post comment. Please try again.");
         } finally {
             setCommentSubmitting(false);
         }
@@ -202,6 +242,46 @@ const WatchPage = () => {
                                 {copied ? <Check size={16} color="var(--success)" /> : <Share2 size={16} />}
                                 <span>{copied ? "Copied Link" : "Share"}</span>
                             </button>
+
+                            {user?._id && video.owner?._id && user._id === video.owner._id && (
+                                confirmDelete ? (
+                                    <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+                                        <button
+                                            className="action-chip"
+                                            onClick={handleDeleteVideo}
+                                            disabled={isDeleting}
+                                            style={{
+                                                background: "rgba(239, 68, 68, 0.2)",
+                                                color: "#ef4444",
+                                                borderColor: "#ef4444",
+                                                fontWeight: 600
+                                            }}
+                                        >
+                                            {isDeleting ? "Deleting..." : "Confirm Delete?"}
+                                        </button>
+                                        <button
+                                            className="action-chip"
+                                            onClick={() => setConfirmDelete(false)}
+                                            disabled={isDeleting}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        className="action-chip"
+                                        onClick={() => setConfirmDelete(true)}
+                                        style={{
+                                            color: "#ef4444",
+                                            borderColor: "rgba(239, 68, 68, 0.35)"
+                                        }}
+                                        title="Delete this video"
+                                    >
+                                        <Trash2 size={16} />
+                                        <span>Delete</span>
+                                    </button>
+                                )
+                            )}
                         </div>
                     </div>
 
@@ -258,28 +338,34 @@ const WatchPage = () => {
                         )}
 
                         {/* Comments List */}
-                        <div>
-                            {comments.map((comment) => (
-                                <div key={comment._id} className="comment-item">
-                                    <img
-                                        src={comment.owner?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80"}
-                                        alt={comment.owner?.fullName || "User"}
-                                        className="channel-avatar"
-                                        style={{ width: "36px", height: "36px" }}
-                                    />
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                                            <span className="comment-author">
-                                                {comment.owner?.fullName || comment.owner?.username}
-                                            </span>
-                                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                                                {new Date(comment.createdAt).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                        <div className="comment-text">{comment.content}</div>
-                                    </div>
+                        <div style={{ marginTop: "16px" }}>
+                            {comments.length === 0 ? (
+                                <div style={{ color: "var(--text-muted)", padding: "24px 0", textAlign: "center" }}>
+                                    No comments yet. Be the first to join the conversation!
                                 </div>
-                            ))}
+                            ) : (
+                                comments.map((comment) => (
+                                    <div key={comment._id} className="comment-item">
+                                        <img
+                                            src={comment.owner?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80"}
+                                            alt={comment.owner?.fullName || "User"}
+                                            className="channel-avatar"
+                                            style={{ width: "36px", height: "36px" }}
+                                        />
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                                <span className="comment-author">
+                                                    {comment.owner?.fullName || comment.owner?.username || "Anonymous"}
+                                                </span>
+                                                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                                                    {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ""}
+                                                </span>
+                                            </div>
+                                            <div className="comment-text">{comment.content}</div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>

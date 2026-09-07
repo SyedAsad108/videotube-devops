@@ -13,6 +13,9 @@ import likeRouter from "./src/routes/like.routes.js";
 
 const app = express();
 
+// Trust proxy for accurate protocol/header detection behind AWS ALB and reverse proxies
+app.set("trust proxy", 1);
+
 // CORS Configuration
 const rawOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
 const allowedOrigins = rawOrigin.split(",").map((o) => o.trim());

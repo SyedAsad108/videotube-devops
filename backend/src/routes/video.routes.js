@@ -7,7 +7,7 @@ import {
     togglePublishStatus,
     updateVideo
 } from "../controllers/video.controller.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyJWT, optionalVerifyJWT } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
@@ -15,8 +15,8 @@ const router = Router();
 // Public route to browse videos
 router.route("/").get(getAllVideos);
 
-// Public route to view a video by ID
-router.route("/:videoId").get(getVideoById);
+// Public route to view a video by ID (with optional auth for watchHistory, likes, and subscriptions)
+router.route("/:videoId").get(optionalVerifyJWT, getVideoById);
 
 // Secured routes
 router.route("/").post(

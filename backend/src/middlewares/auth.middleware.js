@@ -29,23 +29,52 @@ import { User } from "../models/user.model.js";
  */
 export const verifyJWT = asyncHandler(async (req, _, next) => {
     try {
-        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
+        const token =
+            req.cookies?.accessToken ||
+            req.header("Authorization")?.replace("Bearer ", "")?.trim();
 
         if (!token) {
-            throw new ApiError(401, "Unauthorized request")
+            throw new ApiError(401, "Unauthorized request: No access token provided");
         }
 
-        const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
+        const secret = process.env.ACCESS_TOKEN_SECRET || "videotube_dev_access_secret_1234567890";
+        const decodedToken = jwt.verify(token, secret);
 
-        const user = await User.findById(decodedToken?._id).select("-password -refreshToken")
+        const user = await User.findById(decodedToken?._id).select("-password -refreshToken");
 
         if (!user) {
-            throw new ApiError(401, "Invalid Access Token")
+            throw new ApiError(401, "Invalid Access Token: User not found");
         }
 
         req.user = user;
         next();
     } catch (error) {
-        throw new ApiError(401, error?.message || "Invalid Access Token")
+        throw new ApiError(401, error?.message || "Invalid Access Token");
     }
-})
+});
+
+/**
+ * @middleware optionalVerifyJWT
+ * @description Non-blocking authentication middleware. If a token is provided in cookies
+ *              or Authorization header, attaches the user to req.user. If no token is provided
+ *              or the token is invalid, execution continues without blocking the request.
+ */
+export const optionalVerifyJWT = asyncHandler(async (req, _, next) => {
+    try {
+        const token =
+            req.cookies?.accessToken ||
+            req.header("Authorization")?.replace("Bearer ", "")?.trim();
+
+        if (token) {
+            const secret = process.env.ACCESS_TOKEN_SECRET || "videotube_dev_access_secret_1234567890";
+            const decodedToken = jwt.verify(token, secret);
+            const user = await User.findById(decodedToken?._id).select("-password -refreshToken");
+            if (user) {
+                req.user = user;
+            }
+        }
+    } catch {
+        // Soft fail: continue as unauthenticated guest
+    }
+    next();
+});

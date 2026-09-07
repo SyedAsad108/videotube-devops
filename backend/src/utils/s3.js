@@ -98,9 +98,23 @@ const uploadToS3 = async (localFilePath, folder = "videos") => {
  * @param {string} key - S3 object key (e.g. 'videos/video-123.mp4').
  * @returns {Promise<boolean>}
  */
-const deleteFromS3 = async (key) => {
+const deleteFromS3 = async (keyOrUrl) => {
     try {
-        if (!key) return false;
+        if (!keyOrUrl) return false;
+
+        let key = keyOrUrl;
+        if (keyOrUrl.startsWith("http://") || keyOrUrl.startsWith("https://")) {
+            try {
+                const parsedUrl = new URL(keyOrUrl);
+                if (parsedUrl.hostname.includes("amazonaws.com") || (BUCKET_NAME && parsedUrl.hostname.includes(BUCKET_NAME))) {
+                    key = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ""));
+                } else {
+                    return false;
+                }
+            } catch {
+                return false;
+            }
+        }
 
         const command = new DeleteObjectCommand({
             Bucket: BUCKET_NAME,

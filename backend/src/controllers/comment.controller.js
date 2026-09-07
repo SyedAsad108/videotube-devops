@@ -4,6 +4,7 @@ import { Like } from "../models/like.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { getPresignedPlaybackUrl } from "../utils/storage.js";
 
 /**
  * @function getVideoComments
@@ -11,7 +12,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
  */
 const getVideoComments = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 20 } = req.query;
 
     if (!isValidObjectId(videoId)) {
         throw new ApiError(400, "Invalid video ID");
@@ -82,6 +83,21 @@ const getVideoComments = asyncHandler(async (req, res) => {
 
     const comments = await Comment.aggregatePaginate(commentsAggregate, options);
 
+    if (comments?.docs?.length) {
+        comments.docs = await Promise.all(
+            comments.docs.map(async (doc) => {
+                if (doc.owner && doc.owner.avatar && !doc.owner.avatar.startsWith("http")) {
+                    try {
+                        doc.owner.avatar = await getPresignedPlaybackUrl(doc.owner.avatar);
+                    } catch (e) {
+                        console.warn("Failed to presign comment owner avatar:", e.message);
+                    }
+                }
+                return doc;
+            })
+        );
+    }
+
     return res
         .status(200)
         .json(new ApiResponse(200, comments, "Comments fetched successfully"));
@@ -114,9 +130,18 @@ const addComment = asyncHandler(async (req, res) => {
         "fullName username avatar"
     );
 
+    let commentObj = populatedComment?.toObject ? populatedComment.toObject() : populatedComment;
+    if (commentObj?.owner?.avatar && !commentObj.owner.avatar.startsWith("http")) {
+        try {
+            commentObj.owner.avatar = await getPresignedPlaybackUrl(commentObj.owner.avatar);
+        } catch (e) {
+            console.warn("Failed to presign added comment avatar:", e.message);
+        }
+    }
+
     return res
         .status(201)
-        .json(new ApiResponse(201, populatedComment, "Comment added successfully"));
+        .json(new ApiResponse(201, commentObj, "Comment added successfully"));
 });
 
 /**

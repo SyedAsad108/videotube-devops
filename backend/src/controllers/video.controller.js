@@ -187,10 +187,18 @@ const getVideoById = asyncHandler(async (req, res) => {
         $inc: { views: 1 }
     });
 
-    // If user is logged in, optionally add video to watchHistory
+    // If user is logged in, record in watchHistory with duplicate handling (move to most recent)
     if (req.user?._id) {
         await User.findByIdAndUpdate(req.user._id, {
-            $addToSet: { watchHistory: videoId }
+            $pull: { watchHistory: new mongoose.Types.ObjectId(videoId) }
+        });
+        await User.findByIdAndUpdate(req.user._id, {
+            $push: {
+                watchHistory: {
+                    $each: [new mongoose.Types.ObjectId(videoId)],
+                    $slice: -100
+                }
+            }
         });
     }
 
@@ -366,6 +374,10 @@ const deleteVideo = asyncHandler(async (req, res) => {
     await Video.findByIdAndDelete(videoId);
     await Comment.deleteMany({ video: videoId });
     await Like.deleteMany({ video: videoId });
+    await User.updateMany(
+        { watchHistory: videoId },
+        { $pull: { watchHistory: new mongoose.Types.ObjectId(videoId) } }
+    );
 
     if (video.videoFile) await deleteMedia(video.videoFile);
     if (video.thumbnail) await deleteMedia(video.thumbnail);

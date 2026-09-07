@@ -56,25 +56,23 @@ const uploadMedia = async (localFilePath, folder = "general") => {
 const deleteMedia = async (keyOrUrl) => {
     if (!keyOrUrl) return false;
 
-    // Check if it's an S3 key or URL
-    if (!keyOrUrl.includes("cloudinary.com") && !keyOrUrl.startsWith("http")) {
-        return await deleteFromS3(keyOrUrl);
-    }
-
     // Cloudinary deletion
-    try {
-        if (keyOrUrl.includes("cloudinary.com")) {
+    if (keyOrUrl.includes("cloudinary.com")) {
+        try {
             // Extract publicId from URL
             const parts = keyOrUrl.split("/");
             const filename = parts[parts.length - 1];
             const publicId = filename.split(".")[0];
             await cloudinary.uploader.destroy(publicId);
             return true;
+        } catch (error) {
+            console.error("Error deleting from Cloudinary:", error);
+            return false;
         }
-    } catch (error) {
-        console.error("Error deleting from Cloudinary:", error);
     }
-    return false;
+
+    // Default to S3 deletion (handles both raw keys and S3 URLs)
+    return await deleteFromS3(keyOrUrl);
 };
 
 export {

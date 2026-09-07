@@ -5,12 +5,12 @@ import {
     getVideoComments,
     updateComment
 } from "../controllers/comment.controller.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyJWT, optionalVerifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-// Public route to view comments
-router.route("/:videoId").get(getVideoComments);
+// Public route to view comments (with optional auth for like state)
+router.route("/:videoId").get(optionalVerifyJWT, getVideoComments);
 
 // Secured routes
 router.route("/:videoId").post(verifyJWT, addComment);

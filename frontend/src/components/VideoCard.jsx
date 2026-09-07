@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 
 const formatDuration = (seconds) => {
     if (!seconds) return "0:00";
@@ -24,7 +25,7 @@ const formatTimeAgo = (dateString) => {
     return date.toLocaleDateString();
 };
 
-const VideoCard = ({ video }) => {
+const VideoCard = ({ video, isOwner = false, onDelete }) => {
     const navigate = useNavigate();
 
     const handleClick = () => {
@@ -38,9 +39,16 @@ const VideoCard = ({ video }) => {
         }
     };
 
+    const handleDeleteClick = (e) => {
+        e.stopPropagation();
+        if (onDelete) {
+            onDelete(video._id);
+        }
+    };
+
     return (
         <div className="video-card" onClick={handleClick}>
-            <div className="thumbnail-wrapper">
+            <div className="thumbnail-wrapper" style={{ position: "relative" }}>
                 <img
                     src={video.thumbnail || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80"}
                     alt={video.title}
@@ -48,6 +56,31 @@ const VideoCard = ({ video }) => {
                 />
                 {video.duration > 0 && (
                     <span className="video-duration">{formatDuration(video.duration)}</span>
+                )}
+                {isOwner && onDelete && (
+                    <button
+                        className="video-delete-btn"
+                        onClick={handleDeleteClick}
+                        title="Delete video"
+                        style={{
+                            position: "absolute",
+                            top: "8px",
+                            right: "8px",
+                            background: "rgba(15, 15, 15, 0.85)",
+                            border: "1px solid rgba(239, 68, 68, 0.5)",
+                            color: "#ef4444",
+                            width: "30px",
+                            height: "30px",
+                            borderRadius: "6px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            zIndex: 2
+                        }}
+                    >
+                        <Trash2 size={15} />
+                    </button>
                 )}
             </div>
 

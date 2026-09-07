@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { User } from "../models/user.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadMedia, deleteMedia } from "../utils/storage.js";
+import { uploadMedia, deleteMedia, getPresignedPlaybackUrl } from "../utils/storage.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
@@ -50,6 +50,21 @@ const generateAccessTokenandRefreshToken = async function (userId) {
         throw new ApiError(500, error?.message || "Something went wrong while generating Access or Refresh token");
     }
 }
+
+/**
+ * Dynamic cookie options generator:
+ * Ensures cookies work across both plain HTTP (ALB / local Docker) and HTTPS.
+ * Setting `secure: true` over plain HTTP causes modern browsers to drop cookies on arrival.
+ */
+const getCookieOptions = (req) => {
+    const isHttps = req.secure || req.headers?.["x-forwarded-proto"] === "https";
+    return {
+        httpOnly: true,
+        secure: isHttps,
+        sameSite: isHttps ? "none" : "lax",
+        path: "/"
+    };
+};
 /**
  * @function registerUser
  * @description Registers a new user. Performs input validation, verifies uniqueness of username/email,
@@ -124,10 +139,16 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(500, "Failed to retrieve created user");
     }
 
-    const options = {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production"
-    };
+    const options = getCookieOptions(req);
+
+    let userObj = createdUser.toObject ? createdUser.toObject() : { ...createdUser };
+    if (userObj?.avatar && !userObj.avatar.startsWith("http")) {
+        try {
+            userObj.avatar = await getPresignedPlaybackUrl(userObj.avatar);
+        } catch (e) {
+            console.warn("Failed to presign registered user avatar:", e.message);
+        }
+    }
 
     // Step 7: Return a successful response to the client with tokens
     return res
@@ -135,7 +156,7 @@ const registerUser = asyncHandler(async (req, res) => {
         .cookie("accessToken", accessToken, options)
         .cookie("refreshToken", refreshToken, options)
         .json(
-            new ApiResponse(201, { user: createdUser, accessToken, refreshToken }, "User registered successfully")
+            new ApiResponse(201, { user: userObj, accessToken, refreshToken }, "User registered successfully")
         );
 });
 
@@ -190,12 +211,18 @@ const loginUser = asyncHandler(async (req, res) => {
     const { accessToken, refreshToken } = await generateAccessTokenandRefreshToken(user._id);
 
     const loggeedInUser = await User.findById(user._id).
-        select("-password -refreshToken")
+        select("-password -refreshToken");
 
-    const options = {
-        httpOnly: true,
-        secure: true
-    }//why these options ? -> so that frontend can't access these cookies 
+    let userObj = loggeedInUser.toObject ? loggeedInUser.toObject() : { ...loggeedInUser };
+    if (userObj?.avatar && !userObj.avatar.startsWith("http")) {
+        try {
+            userObj.avatar = await getPresignedPlaybackUrl(userObj.avatar);
+        } catch (e) {
+            console.warn("Failed to presign logged-in user avatar:", e.message);
+        }
+    }
+
+    const options = getCookieOptions(req);
 
     return res
         .status(200)
@@ -204,7 +231,7 @@ const loginUser = asyncHandler(async (req, res) => {
         .json(
             new ApiResponse(200,
                 {
-                    user: loggeedInUser, accessToken, refreshToken
+                    user: userObj, accessToken, refreshToken
                 },
                 "User logged in successfully"
             )
@@ -243,10 +270,7 @@ const logoutUser = asyncHandler(async (req, res) => {
             new: true
         }
     )
-    const options = {
-        httpOnly: true,
-        secure: true
-    }
+    const options = getCookieOptions(req);
 
     return res
         .status(200)
@@ -257,43 +281,45 @@ const logoutUser = asyncHandler(async (req, res) => {
 })
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+    const incomingRefreshToken =
+        req.cookies?.refreshToken ||
+        req.body?.refreshToken ||
+        req.header("Authorization")?.replace("Bearer ", "")?.trim();
+
     if (!incomingRefreshToken) {
-        throw new ApiError(401, "unauthorized request")
+        throw new ApiError(401, "unauthorized request: No refresh token provided");
     }
 
     try {
+        const secret = process.env.REFRESH_TOKEN_SECRET || "videotube_dev_refresh_secret_1234567890";
         const decodedToken = jwt.verify(
             incomingRefreshToken,
-            process.env.REFRESH_TOKEN_SECRET
-        )
+            secret
+        );
 
-        const user = await User.findById(decodedToken?._id)
+        const user = await User.findById(decodedToken?._id);
         if (!user) {
-            throw new ApiError(401, "invalid refresh token")
+            throw new ApiError(401, "invalid refresh token: User not found");
         }
 
         if (incomingRefreshToken !== user?.refreshToken) {
-            throw new ApiError(401, "Refresh token is expired or used")
+            throw new ApiError(401, "Refresh token is expired or used");
         }
 
-        const option = {
-            httpOnly: true,
-            secure: true
-        }
+        const options = getCookieOptions(req);
 
         const { accessToken, refreshToken } = await generateAccessTokenandRefreshToken(user._id);
 
         return res
             .status(200)
-            .cookie("accessToken", accessToken, option)
-            .cookie("refreshToken", refreshToken, option)
+            .cookie("accessToken", accessToken, options)
+            .cookie("refreshToken", refreshToken, options)
             .json(
                 new ApiResponse(200, { accessToken, refreshToken }, "tokens refreshed")
             );
 
     } catch (error) {
-        throw new ApiError(401, error?.message || "invalid refresh token")
+        throw new ApiError(401, error?.message || "invalid refresh token");
     }
 
 })
@@ -327,9 +353,17 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 });
 
 const getCurrentUser = asyncHandler(async (req, res) => {
+    let userObj = req.user?.toObject ? req.user.toObject() : { ...req.user };
+    if (userObj?.avatar && !userObj.avatar.startsWith("http")) {
+        try {
+            userObj.avatar = await getPresignedPlaybackUrl(userObj.avatar);
+        } catch (e) {
+            console.warn("Failed to presign current user avatar:", e.message);
+        }
+    }
     return res
         .status(200)
-        .json(new ApiResponse(200, req.user, "Current user fetched successfully"));
+        .json(new ApiResponse(200, userObj, "Current user fetched successfully"));
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
@@ -494,6 +528,15 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 });
 
 const getWatchHistory = asyncHandler(async (req, res) => {
+    const userDoc = await User.findById(req.user._id).select("watchHistory");
+    const rawHistoryIds = userDoc?.watchHistory || [];
+
+    if (!rawHistoryIds.length) {
+        return res
+            .status(200)
+            .json(new ApiResponse(200, [], "Watch history fetched successfully"));
+    }
+
     const user = await User.aggregate([
         {
             $match: {
@@ -539,12 +582,44 @@ const getWatchHistory = asyncHandler(async (req, res) => {
         }
     ]);
 
+    let history = user[0]?.watchHistory || [];
+
+    // Filter out any null or deleted video documents
+    history = history.filter((v) => v && v._id);
+
+    // Sort by position in rawHistoryIds descending (most recently watched first)
+    const idOrder = rawHistoryIds.map((id) => id.toString());
+    history.sort((a, b) => idOrder.lastIndexOf(b._id.toString()) - idOrder.lastIndexOf(a._id.toString()));
+
+    // Presign thumbnails and avatars so watch history renders cleanly from S3
+    if (history.length) {
+        history = await Promise.all(
+            history.map(async (video) => {
+                if (video.thumbnail && !video.thumbnail.startsWith("http")) {
+                    try {
+                        video.thumbnail = await getPresignedPlaybackUrl(video.thumbnail);
+                    } catch (e) {
+                        console.warn("Failed to presign history thumbnail:", e.message);
+                    }
+                }
+                if (video.owner?.avatar && !video.owner.avatar.startsWith("http")) {
+                    try {
+                        video.owner.avatar = await getPresignedPlaybackUrl(video.owner.avatar);
+                    } catch (e) {
+                        console.warn("Failed to presign history avatar:", e.message);
+                    }
+                }
+                return video;
+            })
+        );
+    }
+
     return res
         .status(200)
         .json(
             new ApiResponse(
                 200,
-                user[0]?.watchHistory || [],
+                history,
                 "Watch history fetched successfully"
             )
         );
