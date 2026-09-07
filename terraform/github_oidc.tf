@@ -118,6 +118,41 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "elasticloadbalancing:DescribeTargetHealth"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "S3FrontendBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          "arn:aws:s3:::videotube-dev-frontend-5f087aba",
+          aws_s3_bucket.frontend.arn
+        ]
+      },
+      {
+        Sid    = "S3FrontendObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = [
+          "arn:aws:s3:::videotube-dev-frontend-5f087aba/*",
+          "${aws_s3_bucket.frontend.arn}/*"
+        ]
+      },
+      {
+        Sid    = "CloudFrontInvalidation"
+        Effect = "Allow"
+        Action = [
+          "cloudfront:CreateInvalidation",
+          "cloudfront:GetInvalidation"
+        ]
+        Resource = "*"
       }
     ]
   })
