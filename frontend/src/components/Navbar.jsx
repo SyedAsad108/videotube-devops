@@ -23,7 +23,7 @@ const Navbar = ({ onOpenUpload }) => {
                 <div className="nav-brand-logo">
                     <PlaySquare size={18} strokeWidth={2.2} />
                 </div>
-                <span>VideoTube</span>
+                <span>VideoTube </span>
             </Link>
 
             <form className="nav-search" onSubmit={handleSearch}>
