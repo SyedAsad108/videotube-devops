@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2 } from "lucide-react";
+import { Trash2, Play } from "lucide-react";
 
 const formatDuration = (seconds) => {
     if (!seconds) return "0:00";
@@ -25,7 +25,7 @@ const formatTimeAgo = (dateString) => {
     return date.toLocaleDateString();
 };
 
-const VideoCard = ({ video, isOwner = false, onDelete }) => {
+const VideoCard = memo(({ video, isOwner = false, onDelete }) => {
     const navigate = useNavigate();
 
     const handleClick = () => {
@@ -48,15 +48,25 @@ const VideoCard = ({ video, isOwner = false, onDelete }) => {
 
     return (
         <div className="video-card" onClick={handleClick}>
-            <div className="thumbnail-wrapper" style={{ position: "relative" }}>
+            <div className="thumbnail-wrapper">
                 <img
                     src={video.thumbnail || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80"}
                     alt={video.title}
                     loading="lazy"
+                    decoding="async"
                 />
+
+                {/* Subtle Hover Play Overlay */}
+                <div className="thumbnail-play-overlay">
+                    <div className="thumbnail-play-badge">
+                        <Play size={20} fill="#ffffff" strokeWidth={0} />
+                    </div>
+                </div>
+
                 {video.duration > 0 && (
                     <span className="video-duration">{formatDuration(video.duration)}</span>
                 )}
+
                 {isOwner && onDelete && (
                     <button
                         className="video-delete-btn"
@@ -64,19 +74,21 @@ const VideoCard = ({ video, isOwner = false, onDelete }) => {
                         title="Delete video"
                         style={{
                             position: "absolute",
-                            top: "8px",
-                            right: "8px",
-                            background: "rgba(15, 15, 15, 0.85)",
+                            top: "10px",
+                            right: "10px",
+                            background: "rgba(12, 13, 18, 0.88)",
+                            backdropFilter: "blur(8px)",
                             border: "1px solid rgba(239, 68, 68, 0.5)",
-                            color: "#ef4444",
-                            width: "30px",
-                            height: "30px",
-                            borderRadius: "6px",
+                            color: "#ff334b",
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "8px",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             cursor: "pointer",
-                            zIndex: 2
+                            zIndex: 3,
+                            transition: "all 0.18s ease"
                         }}
                     >
                         <Trash2 size={15} />
@@ -87,9 +99,12 @@ const VideoCard = ({ video, isOwner = false, onDelete }) => {
             <div className="video-info">
                 <img
                     src={video.owner?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80"}
-                    alt={video.owner?.fullName || "User"}
+                    alt={video.owner?.fullName || "Channel"}
                     className="channel-avatar"
+                    loading="lazy"
+                    decoding="async"
                     onClick={handleChannelClick}
+                    title={video.owner?.fullName || video.owner?.username}
                 />
                 <div className="video-details">
                     <h3 className="video-title" title={video.title}>{video.title}</h3>
@@ -103,6 +118,8 @@ const VideoCard = ({ video, isOwner = false, onDelete }) => {
             </div>
         </div>
     );
-};
+});
+
+VideoCard.displayName = "VideoCard";
 
 export default VideoCard;

@@ -183,18 +183,21 @@ const WatchPage = () => {
         <div className="watch-container">
             {/* Primary Video Player & Interaction Column */}
             <div>
-                <div className="player-card">
-                    <video
-                        src={video.playbackUrl || video.videoFile}
-                        poster={video.thumbnail}
-                        controls
-                        autoPlay
-                        playsInline
-                    />
+                <div className="player-wrapper-relative">
+                    <div className="player-ambient-glow" />
+                    <div className="player-card">
+                        <video
+                            src={video.playbackUrl || video.videoFile}
+                            poster={video.thumbnail}
+                            controls
+                            autoPlay
+                            playsInline
+                        />
+                    </div>
                 </div>
 
                 <div className="watch-info">
-                    <h1 style={{ fontSize: "1.35rem", lineHeight: 1.4 }}>{video.title}</h1>
+                    <h1 style={{ fontSize: "1.45rem", lineHeight: 1.35, fontWeight: 700 }}>{video.title}</h1>
 
                     <div className="watch-header">
                         {/* Channel Details & Subscribe Button */}

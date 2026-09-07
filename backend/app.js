@@ -55,6 +55,20 @@ app.use((err, req, res, next) => {
         });
     }
 
+    // Handle Multer upload errors (size limit, invalid format) gracefully as 400 Bad Request
+    if (err.name === "MulterError" || err.message?.includes("Unsupported file type") || err.code === "LIMIT_FILE_SIZE") {
+        const message = err.code === "LIMIT_FILE_SIZE"
+            ? "File size exceeds the 100 MB limit"
+            : err.message || "File upload validation error";
+        return res.status(400).json({
+            statusCode: 400,
+            data: null,
+            message,
+            success: false,
+            errors: [message]
+        });
+    }
+
     // Default fallback for generic/unexpected errors
     const statusCode = err.statusCode || (err.name === "ValidationError" ? 400 : 500);
     const message = err.message || "Internal Server Error";

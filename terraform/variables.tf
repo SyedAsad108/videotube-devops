@@ -90,3 +90,10 @@ variable "jwt_refresh_secret" {
   default     = "videotube_dev_refresh_secret_1234567890"
   sensitive   = true
 }
+
+variable "enable_cloudfront" {
+  description = "Flag to create CloudFront distribution once AWS Support verifies the account for CloudFront"
+  type        = bool
+  default     = false
+}
+

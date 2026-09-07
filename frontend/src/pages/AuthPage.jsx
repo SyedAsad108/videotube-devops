@@ -59,7 +59,17 @@ const AuthPage = () => {
 
     return (
         <div className="auth-wrapper">
+            <div className="auth-aura" />
             <div className="auth-card">
+                <div style={{ textAlign: "center", marginBottom: "28px" }}>
+                    <h2 style={{ fontSize: "1.6rem", fontWeight: 800, letterSpacing: "-0.03em" }}>
+                        Video<span style={{ color: "var(--accent-primary)" }}>Tube</span>
+                    </h2>
+                    <p style={{ fontSize: "0.86rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                        {tab === "login" ? "Welcome back! Enter your credentials to continue." : "Join our community of video creators and engineers."}
+                    </p>
+                </div>
+
                 <div className="auth-tabs">
                     <div
                         className={`auth-tab ${tab === "login" ? "active" : ""}`}

@@ -159,6 +159,13 @@ const getPresignedPlaybackUrl = async (keyOrUrl, expiresInSeconds = 3600) => {
             }
         }
 
+        // If CloudFront media distribution is configured, route via edge CDN for fast Range request streaming
+        const cloudfrontDomain = process.env.CLOUDFRONT_DOMAIN || process.env.CLOUDFRONT_MEDIA_URL;
+        if (cloudfrontDomain) {
+            const domain = cloudfrontDomain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+            return `https://${domain}/${key}`;
+        }
+
         const command = new GetObjectCommand({
             Bucket: BUCKET_NAME,
             Key: key
