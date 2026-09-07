@@ -125,26 +125,32 @@ const publishAVideo = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Video file is required");
     }
 
-    if (!thumbnailLocalPath) {
-        throw new ApiError(400, "Thumbnail file is required");
-    }
-
+    // Upload video to cloud storage
     const videoFile = await uploadMedia(videoFileLocalPath, "videos");
-    const thumbnail = await uploadMedia(thumbnailLocalPath, "thumbnails");
-
-    if (!videoFile?.url) {
-        throw new ApiError(500, "Failed to upload video file");
+    if (!videoFile?.url && !videoFile?.key) {
+        throw new ApiError(500, "Failed to upload video file to cloud storage");
     }
 
-    if (!thumbnail?.url) {
-        throw new ApiError(500, "Failed to upload thumbnail file");
+    // Default fallback thumbnail if none provided or upload fails
+    const defaultThumbnail = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80";
+    let thumbnailUrl = defaultThumbnail;
+
+    if (thumbnailLocalPath) {
+        try {
+            const uploadedThumb = await uploadMedia(thumbnailLocalPath, "thumbnails");
+            if (uploadedThumb?.url || uploadedThumb?.key) {
+                thumbnailUrl = uploadedThumb.key || uploadedThumb.url;
+            }
+        } catch (thumbErr) {
+            console.warn("Thumbnail upload failed, falling back to default:", thumbErr?.message);
+        }
     }
 
     const video = await Video.create({
         title: title.trim(),
         description: description.trim(),
         videoFile: videoFile.key || videoFile.url,
-        thumbnail: thumbnail.key || thumbnail.url,
+        thumbnail: thumbnailUrl,
         duration: videoFile.duration || 0,
         views: 0,
         isPublished: true,

@@ -11,8 +11,7 @@ const videoSchema = new Schema(
         },
         thumbnail: {
             type: String,
-            required: true,
-
+            default: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
         },
         title: {
             type: String,
@@ -26,8 +25,7 @@ const videoSchema = new Schema(
         },
         duration: {
             type: Number,
-            required: true,
-
+            default: 0
         },
         views: {
             type: Number,

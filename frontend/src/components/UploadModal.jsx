@@ -26,18 +26,15 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
             return;
         }
 
-        if (!thumbnail) {
-            setError("Please select a thumbnail image.");
-            return;
-        }
-
         try {
             setUploading(true);
             const formData = new FormData();
             formData.append("title", title.trim());
             formData.append("description", description.trim());
             formData.append("videoFile", videoFile);
-            formData.append("thumbnail", thumbnail);
+            if (thumbnail) {
+                formData.append("thumbnail", thumbnail);
+            }
 
             const res = await API.post("/videos", formData, {
                 headers: {
@@ -105,13 +102,12 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
                     </div>
 
                     <div className="form-group">
-                        <label>Thumbnail Image (JPEG, PNG, WebP) *</label>
+                        <label>Thumbnail Image (Optional)</label>
                         <input
                             type="file"
                             accept="image/*"
                             onChange={(e) => setThumbnail(e.target.files[0])}
                             disabled={uploading}
-                            required
                         />
                     </div>
 
