@@ -1,70 +1,71 @@
 import React from "react";
-import { NavLink, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { Compass, Flame, Tv, Clock, ThumbsUp, UserCircle } from "lucide-react";
 
 const Sidebar = () => {
     const { user } = useAuth();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
     const currentCategory = searchParams.get("category");
+
+    const isExploreActive = location.pathname === "/" && !currentCategory;
+    const isTrendingActive = location.pathname === "/" && currentCategory === "Trending";
 
     return (
         <aside className="sidebar">
             <div className="sidebar-section-title">Discover</div>
 
-            <NavLink
+            <Link
                 to="/"
-                className={({ isActive }) =>
-                    `sidebar-item ${isActive && !currentCategory ? "active" : ""}`
-                }
-                end
+                className={`sidebar-item ${isExploreActive ? "active" : ""}`}
             >
                 <Compass size={18} />
                 <span>Explore All</span>
-            </NavLink>
+            </Link>
 
-            <NavLink
+            <Link
                 to="/?category=Trending"
-                className={`sidebar-item ${currentCategory === "Trending" ? "active" : ""}`}
+                className={`sidebar-item ${isTrendingActive ? "active" : ""}`}
             >
                 <Flame size={18} />
                 <span>Trending</span>
-            </NavLink>
+            </Link>
 
-            <NavLink
+            <Link
                 to="/subscriptions"
-                className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
+                className={`sidebar-item ${location.pathname === "/subscriptions" ? "active" : ""}`}
             >
                 <Tv size={18} />
                 <span>Subscriptions</span>
-            </NavLink>
+            </Link>
 
             <div className="sidebar-section-title" style={{ marginTop: "12px" }}>Library</div>
 
-            <NavLink
+            <Link
                 to="/history"
-                className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
+                className={`sidebar-item ${location.pathname === "/history" ? "active" : ""}`}
             >
                 <Clock size={18} />
                 <span>Watch History</span>
-            </NavLink>
+            </Link>
 
-            <NavLink
+            <Link
                 to="/liked-videos"
-                className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
+                className={`sidebar-item ${location.pathname === "/liked-videos" ? "active" : ""}`}
             >
                 <ThumbsUp size={18} />
                 <span>Liked Videos</span>
-            </NavLink>
+            </Link>
 
             {user && (
-                <NavLink
+                <Link
                     to={`/c/${user.username}`}
-                    className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
+                    className={`sidebar-item ${location.pathname === `/c/${user.username}` ? "active" : ""}`}
                 >
                     <UserCircle size={18} />
                     <span>My Studio</span>
-                </NavLink>
+                </Link>
             )}
         </aside>
     );
