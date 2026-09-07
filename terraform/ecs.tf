@@ -123,6 +123,12 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Grants EC2 instances direct access to S3 media bucket
+resource "aws_iam_role_policy_attachment" "ec2_s3" {
+  role       = aws_iam_role.ec2_instance.name
+  policy_arn = aws_iam_policy.s3_access.arn
+}
+
 # Instance Profile — wraps the EC2 role so it can be attached to EC2 instances
 resource "aws_iam_instance_profile" "ec2_ecs" {
   name = "${local.name_prefix}-ec2-instance-profile"
@@ -305,7 +311,9 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "AWS_REGION", value = var.aws_region },
         { name = "AWS_BUCKET_NAME", value = aws_s3_bucket.media.bucket },
         { name = "ACCESS_TOKEN_SECRET", value = var.jwt_access_secret },
-        { name = "REFRESH_TOKEN_SECRET", value = var.jwt_refresh_secret }
+        { name = "REFRESH_TOKEN_SECRET", value = var.jwt_refresh_secret },
+        { name = "ACCESS_TOKEN_EXPIRY", value = "1d" },
+        { name = "REFRESH_TOKEN_EXPIRY", value = "10d" }
       ]
 
       logConfiguration = {

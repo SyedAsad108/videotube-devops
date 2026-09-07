@@ -10,7 +10,7 @@ import path from "path";
 
 // Initialize S3 Client
 const s3Config = {
-    region: process.env.AWS_REGION || "us-east-1"
+    region: process.env.AWS_REGION || "ap-south-1"
 };
 
 // If explicit static credentials are provided in .env (for local testing)
@@ -22,7 +22,7 @@ if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
 }
 
 const s3Client = new S3Client(s3Config);
-const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || process.env.AWS_BUCKET_NAME || "videotube-media-bucket";
+const BUCKET_NAME = process.env.AWS_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME || "videotube-dev-media-5f087aba";
 
 /**
  * Helper to determine Content-Type from file extension
@@ -117,19 +117,32 @@ const deleteFromS3 = async (key) => {
 
 /**
  * @function getPresignedPlaybackUrl
- * @description Generates a presigned GET URL for secure, direct video streaming from S3.
+ * @description Generates a presigned GET URL for secure, direct video streaming and thumbnail loading from S3.
  * 
- * @param {string} key - S3 object key or existing URL.
+ * @param {string} keyOrUrl - S3 object key or S3/HTTP URL.
  * @param {number} expiresInSeconds - Expiration window in seconds (default: 3600 = 1 hour).
  * @returns {Promise<string>} Presigned S3 URL or direct URL.
  */
-const getPresignedPlaybackUrl = async (key, expiresInSeconds = 3600) => {
+const getPresignedPlaybackUrl = async (keyOrUrl, expiresInSeconds = 3600) => {
     try {
-        if (!key) return "";
+        if (!keyOrUrl) return "";
 
-        // If it's already an external HTTP(S) URL (e.g., Cloudinary), return as is
-        if (key.startsWith("http://") || key.startsWith("https://")) {
-            return key;
+        let key = keyOrUrl;
+
+        // If it's a URL, check if it points to S3
+        if (keyOrUrl.startsWith("http://") || keyOrUrl.startsWith("https://")) {
+            try {
+                const parsedUrl = new URL(keyOrUrl);
+                if (parsedUrl.hostname.includes("amazonaws.com") || parsedUrl.hostname.includes(BUCKET_NAME)) {
+                    // Extract the key path from the URL
+                    key = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ""));
+                } else {
+                    // External URL (e.g. Unsplash)
+                    return keyOrUrl;
+                }
+            } catch {
+                return keyOrUrl;
+            }
         }
 
         const command = new GetObjectCommand({
@@ -139,8 +152,8 @@ const getPresignedPlaybackUrl = async (key, expiresInSeconds = 3600) => {
 
         return await getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
     } catch (error) {
-        console.error("Error generating S3 presigned URL:", error);
-        return key;
+        console.error("Error generating S3 presigned URL for", keyOrUrl, ":", error?.message);
+        return keyOrUrl;
     }
 };
 

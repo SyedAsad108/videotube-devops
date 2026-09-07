@@ -35,75 +35,52 @@ import jwt from "jsonwebtoken";
  */
 const generateAccessTokenandRefreshToken = async function (userId) {
     try {
-
         const user = await User.findById(userId);
+        if (!user) {
+            throw new ApiError(404, "User not found for token generation");
+        }
         const refreshToken = await user.generateRefreshToken();
         const accessToken = await user.generateAccessToken();
         user.refreshToken = refreshToken;
-        await user.save({ validateBeforeSave: false })
-        return { accessToken, refreshToken }
+        await user.save({ validateBeforeSave: false });
+        return { accessToken, refreshToken };
     }
     catch (error) {
         console.error("Error in generateAccessTokenandRefreshToken:", error);
-        throw new ApiError(500, "Something went wrong while generating Access or Refresh token");
+        throw new ApiError(500, error?.message || "Something went wrong while generating Access or Refresh token");
     }
 }
 /**
  * @function registerUser
  * @description Registers a new user. Performs input validation, verifies uniqueness of username/email,
- *              uploads the user's avatar and optional cover image to Cloudinary, stores credentials
- *              in the database, and returns the created user record without sensitive information.
- * 
- * @reason Why it is written:
- * This handler is the entry point for new users to join the platform. It ensures only validated,
- * unique user accounts are created with required media assets (avatar), securely stores passwords,
- * and maintains database integrity.
- * 
- * @logic
- * 1. Extracts user registration fields (`fullName`, `username`, `email`, `password`) from `req.body`.
- * 2. Checks that none of these required fields are empty (using `.some()` and `.trim()`), throwing a 400 ApiError if they are.
- * 3. Queries the database using `User.findOne` with an `$or` query to verify that the username or email is not already registered, throwing a 409 ApiError (Conflict) if they exist.
- * 4. Extracts the local paths of uploaded files (avatar and coverImage) from `req.files` which was populated by Multer.
- * 5. Ensures an avatar image is uploaded, throwing a 400 ApiError if missing.
- * 6. Uploads the avatar to Cloudinary using the local path. If a cover image is provided, uploads it as well.
- * 7. Verifies the avatar upload succeeded and returned a URL, throwing a 400 ApiError otherwise.
- * 8. Inserts a new user record into the database, setting the password (which is hashed in pre-save hook) and lowercase username.
- * 9. Queries the database again to retrieve the newly registered user's object while omitting `password` and `refreshToken` for security.
- * 10. Sends a 201 status response back with the created user object and a success message.
+ *              assigns default avatar or uploads optional media, creates user in MongoDB, and generates tokens.
  */
 const registerUser = asyncHandler(async (req, res) => {
-
     // Step 1: Destructure and retrieve user details from request body
     const { fullName, username, email, password } = req.body;
 
     // Step 2: Validate that all required fields are provided and not empty
-    if ([fullName, username, email, password].some((field) => !field || field.trim() === "")) {
+    if (!fullName || !username || !email || !password || [fullName, username, email, password].some((field) => typeof field !== "string" || field.trim() === "")) {
         throw new ApiError(400, "All fields (fullName, username, email, password) are required");
     }
 
+    const cleanUsername = username.toLowerCase().trim();
+    const cleanEmail = email.toLowerCase().trim();
+
     // Step 3: Check if the user already exists in the database by username or email
     const existedUser = await User.findOne({
-        $or: [{ username }, { email }]
+        $or: [{ username: cleanUsername }, { email: cleanEmail }]
     });
     if (existedUser) {
-        throw new ApiError(409, "User with this username or email already exists")
-    };
+        throw new ApiError(409, "User with this username or email already exists");
+    }
 
-    // Logging parsed body and files for debugging purposes
-    console.log("REQ.BODY");
-    console.log(req.body);
-    console.log("REQ.FILES");
-    console.log(req.files);
-
-    // Step 4: Access local paths of optional uploaded files stored temporarily by Multer middleware
-    const avatarLocalPath = req.files?.avatar?.[0]?.path;
-    const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
-
-    // Default fallback avatar if none provided or upload fails
+    // Default fallback avatar
     const defaultAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80";
-    let avatarUrl = defaultAvatar;
+    let avatarUrl = req.body.avatar || defaultAvatar;
 
-    // Step 5: If an avatar was provided, attempt to upload to storage
+    // Step 4: Optional avatar upload if Multer staged a file
+    const avatarLocalPath = req.files?.avatar?.[0]?.path;
     if (avatarLocalPath) {
         try {
             const avatar = await uploadMedia(avatarLocalPath, "avatars");
@@ -111,12 +88,13 @@ const registerUser = asyncHandler(async (req, res) => {
                 avatarUrl = avatar.key || avatar.url;
             }
         } catch (uploadErr) {
-            console.warn("Avatar upload failed, falling back to default avatar:", uploadErr?.message);
+            console.warn("Avatar upload failed, using default avatar:", uploadErr?.message);
         }
     }
 
-    // If cover image was provided, attempt upload
-    let coverImageUrl = "";
+    // Optional cover image
+    let coverImageUrl = req.body.coverImage || "";
+    const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
     if (coverImageLocalPath) {
         try {
             const coverImage = await uploadMedia(coverImageLocalPath, "cover-images");
@@ -128,26 +106,37 @@ const registerUser = asyncHandler(async (req, res) => {
         }
     }
 
-    // Step 6: Save the user record in the database
+    // Step 5: Save the user record in the database
     const user = await User.create({
-        fullName,
+        fullName: fullName.trim(),
         avatar: avatarUrl,
         coverImage: coverImageUrl,
-        email,
-        password,
-        username: username.toLowerCase() // store username in lowercase for consistency
+        email: cleanEmail,
+        password: password.trim(),
+        username: cleanUsername
     });
 
-    // Step 9: Retrieve the created user without the password and refreshToken fields for safety
+    // Step 6: Generate access and refresh tokens
+    const { accessToken, refreshToken } = await generateAccessTokenandRefreshToken(user._id);
+
     const createdUser = await User.findById(user._id).select("-password -refreshToken");
     if (!createdUser) {
-        throw new ApiError(400, "Failed to create user");
+        throw new ApiError(500, "Failed to retrieve created user");
     }
 
-    // Step 10: Return a successful response to the client
-    return res.status(201).json(
-        new ApiResponse(201, createdUser, "user registered successfully")
-    )
+    const options = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production"
+    };
+
+    // Step 7: Return a successful response to the client with tokens
+    return res
+        .status(201)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", refreshToken, options)
+        .json(
+            new ApiResponse(201, { user: createdUser, accessToken, refreshToken }, "User registered successfully")
+        );
 });
 
 

@@ -37,12 +37,12 @@ export const AuthProvider = ({ children }) => {
         return loggedUser;
     };
 
-    const register = async (formData) => {
-        const res = await API.post("/users/register", formData, {
-            headers: {
-                "Content-Type": "multipart/form-data"
-            }
-        });
+    const register = async (userData) => {
+        const res = await API.post("/users/register", userData);
+        const loggedUser = res.data?.data?.user;
+        if (loggedUser) {
+            setUser(loggedUser);
+        }
         return res.data?.data;
     };
 

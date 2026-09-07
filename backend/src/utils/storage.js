@@ -11,10 +11,10 @@ const getStorageProvider = () => {
     if (process.env.STORAGE_PROVIDER) {
         return process.env.STORAGE_PROVIDER.toLowerCase();
     }
-    if (process.env.AWS_S3_BUCKET_NAME && (process.env.AWS_ACCESS_KEY_ID || process.env.ECS_CONTAINER_METADATA_URI_V4)) {
+    if (process.env.AWS_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME) {
         return "s3";
     }
-    return "cloudinary";
+    return "s3";
 };
 
 /**

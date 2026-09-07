@@ -19,8 +19,6 @@ const AuthPage = () => {
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [avatar, setAvatar] = useState(null);
-    const [coverImage, setCoverImage] = useState(null);
 
     const handleLoginSubmit = async (e) => {
         e.preventDefault();
@@ -43,21 +41,14 @@ const AuthPage = () => {
 
         setLoading(true);
         try {
-            const formData = new FormData();
-            formData.append("fullName", fullName.trim());
-            formData.append("username", username.trim());
-            formData.append("email", email.trim());
-            formData.append("password", password);
-            if (avatar) {
-                formData.append("avatar", avatar);
-            }
-            if (coverImage) {
-                formData.append("coverImage", coverImage);
-            }
-
-            await register(formData);
+            await register({
+                fullName: fullName.trim(),
+                username: username.trim(),
+                email: email.trim(),
+                password
+            });
             // Automatically log in after registration
-            await login(username, password);
+            await login(username.trim(), password);
             navigate("/");
         } catch (err) {
             setError(err.response?.data?.message || "Registration failed. Please check your details.");
@@ -169,24 +160,6 @@ const AuthPage = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Avatar Photo (Optional)</label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => setAvatar(e.target.files[0])}
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Cover Banner (Optional)</label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => setCoverImage(e.target.files[0])}
                             />
                         </div>
 

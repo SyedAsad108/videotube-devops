@@ -14,9 +14,15 @@ import likeRouter from "./src/routes/like.routes.js";
 const app = express();
 
 // CORS Configuration
-const allowedOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
+const rawOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
+const allowedOrigins = rawOrigin.split(",").map((o) => o.trim());
 app.use(cors({
-    origin: allowedOrigin,
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+            return callback(null, true);
+        }
+        return callback(null, true);
+    },
     credentials: true
 }));
 

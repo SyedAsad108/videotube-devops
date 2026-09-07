@@ -84,6 +84,20 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
     const videos = await Video.aggregatePaginate(Video.aggregate(pipeline), options);
 
+    // Map presigned URLs for thumbnails and avatars so video cards load cleanly from S3
+    if (videos?.docs?.length) {
+        await Promise.all(
+            videos.docs.map(async (doc) => {
+                if (doc.thumbnail) {
+                    doc.thumbnail = await getPresignedPlaybackUrl(doc.thumbnail);
+                }
+                if (doc.owner?.avatar) {
+                    doc.owner.avatar = await getPresignedPlaybackUrl(doc.owner.avatar);
+                }
+            })
+        );
+    }
+
     // Cache results for 2 minutes (120s TTL)
     await setCache(cacheKey, videos, 120);
 
@@ -257,6 +271,12 @@ const getVideoById = asyncHandler(async (req, res) => {
 
     const videoData = videoAggregate[0];
     videoData.playbackUrl = await getPresignedPlaybackUrl(videoData.videoFile);
+    if (videoData.thumbnail) {
+        videoData.thumbnail = await getPresignedPlaybackUrl(videoData.thumbnail);
+    }
+    if (videoData.owner?.avatar) {
+        videoData.owner.avatar = await getPresignedPlaybackUrl(videoData.owner.avatar);
+    }
 
     return res
         .status(200)

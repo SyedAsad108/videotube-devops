@@ -65,27 +65,28 @@ userSchema.methods.isPasswordCorrect = async function (password) {
 };
 
 userSchema.methods.generateAccessToken = async function () {
-    return jwt.sign({
-        _id: this._id,
-        email: this.email,
-        fullName: this.fullName,
-        username: this.username
-    }, process.env.ACCESS_TOKEN_SECRET,
+    return jwt.sign(
         {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRY
+            _id: this._id,
+            email: this.email,
+            fullName: this.fullName,
+            username: this.username
+        },
+        process.env.ACCESS_TOKEN_SECRET || "videotube_dev_access_secret_1234567890",
+        {
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "1d"
         }
     );
 };
-
 
 userSchema.methods.generateRefreshToken = async function () {
     return jwt.sign(
         {
             _id: this._id,
         },
-        process.env.REFRESH_TOKEN_SECRET,
+        process.env.REFRESH_TOKEN_SECRET || "videotube_dev_refresh_secret_1234567890",
         {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRY || "10d"
         }
     );
 };
