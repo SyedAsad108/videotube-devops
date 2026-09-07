@@ -6,6 +6,16 @@ on:
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      component:
+        description: 'Select component to deploy'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - 'both'
+          - 'frontend'
+          - 'backend'
 
 permissions:
   contents: read
@@ -20,9 +30,9 @@ jobs:
     name: Detect Changed Components
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.frontend == 'true' }}
-      backend: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.backend == 'true' }}
-      terraform: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.terraform == 'true' }}
+      frontend: ${{ (github.event_name == 'workflow_dispatch' && (inputs.component == 'both' || inputs.component == 'frontend' || github.event.inputs.component == 'both' || github.event.inputs.component == 'frontend')) || steps.filter.outputs.frontend == 'true' }}
+      backend: ${{ (github.event_name == 'workflow_dispatch' && (inputs.component == 'both' || inputs.component == 'backend' || github.event.inputs.component == 'both' || github.event.inputs.component == 'backend')) || steps.filter.outputs.backend == 'true' }}
+      terraform: ${{ (github.event_name == 'workflow_dispatch' && (inputs.component == 'both' || github.event.inputs.component == 'both')) || steps.filter.outputs.terraform == 'true' }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
