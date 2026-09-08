@@ -8,10 +8,7 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.backend.repository_url
 }
 
-output "ecr_frontend_repository_url" {
-  description = "URL of the Amazon ECR repository for frontend images"
-  value       = aws_ecr_repository.frontend.repository_url
-}
+# NOTE: ecr_frontend_repository_url output removed — frontend ECR repo no longer exists.
 
 output "s3_bucket_name" {
   description = "Name of the S3 media storage bucket"
@@ -33,15 +30,8 @@ output "ecs_service_name" {
   value       = aws_ecs_service.backend.name
 }
 
-output "ecs_frontend_service_name" {
-  description = "Name of the frontend ECS service"
-  value       = aws_ecs_service.frontend.name
-}
-
-output "frontend_target_group_arn" {
-  description = "ARN of the frontend ALB target group"
-  value       = aws_lb_target_group.frontend.arn
-}
+# NOTE: ecs_frontend_service_name and frontend_target_group_arn outputs removed.
+# Frontend ECS service and ALB target group have been removed; frontend uses CloudFront + S3.
 
 output "vpc_id" {
   description = "ID of the VPC"

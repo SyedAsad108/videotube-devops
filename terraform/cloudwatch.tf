@@ -11,14 +11,7 @@ resource "aws_cloudwatch_log_group" "ecs" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "ecs_frontend" {
-  name              = "/ecs/${local.name_prefix}-frontend"
-  retention_in_days = 7
-
-  tags = {
-    Name = "${local.name_prefix}-ecs-frontend-logs"
-  }
-}
+# NOTE: Frontend ECS log group removed — frontend runs on CloudFront/S3, not ECS.
 
 # CPU Utilization Alarm
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {

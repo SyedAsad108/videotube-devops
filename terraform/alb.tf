@@ -41,40 +41,23 @@ resource "aws_lb_target_group" "backend" {
   }
 }
 
-# Target Group routing to Frontend ECS tasks on EC2
-resource "aws_lb_target_group" "frontend" {
-  name        = "${local.name_prefix}-frontend-tg"
-  port        = 80
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "instance"   # EC2 bridge mode requires "instance"
+# NOTE: Frontend target group removed — frontend is served via S3 + CloudFront, not ALB.
 
-  health_check {
-    enabled             = true
-    path                = "/"
-    protocol            = "HTTP"
-    port                = "traffic-port"
-    matcher             = "200"
-    interval            = 30
-    timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 3
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-frontend-tg"
-  }
-}
-
-# HTTP Port 80 Listener (Default action: forward to frontend target group)
+# HTTP Port 80 Listener — Default: 404 fixed-response (frontend is on CloudFront, not ALB)
+# All /api/* requests are routed to the backend target group via listener rule below.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.frontend.arn
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "VideoTube frontend is served via CloudFront. Use the CloudFront URL to access the application."
+      status_code  = "404"
+    }
   }
 }
 

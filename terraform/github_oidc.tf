@@ -80,8 +80,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "ecr:ListImages"
         ]
         Resource = [
-          aws_ecr_repository.backend.arn,
-          aws_ecr_repository.frontend.arn
+          aws_ecr_repository.backend.arn
         ]
       },
       {
