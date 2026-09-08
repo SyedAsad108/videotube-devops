@@ -1,7 +1,9 @@
 import axios from "axios";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "/api/v1" : "http://videotube-dev-alb-1814074354.ap-south-1.elb.amazonaws.com/api/v1");
+
 const API = axios.create({
-    baseURL: "/api/v1",
+    baseURL: API_BASE,
     withCredentials: true,
     headers: {
         "Content-Type": "application/json"
@@ -39,7 +41,7 @@ API.interceptors.response.use(
                 // Call refresh token endpoint with both cookie and body payload
                 const refreshToken = localStorage.getItem("videotube_refresh_token");
                 const res = await axios.post(
-                    "/api/v1/users/refresh-token",
+                    `${API_BASE}/users/refresh-token`,
                     { refreshToken },
                     { withCredentials: true }
                 );
