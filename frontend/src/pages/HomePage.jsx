@@ -83,16 +83,16 @@ const HomePage = () => {
             </div>
 
             {/* Content Title Header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 24px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div className="feed-header">
+                <div className="feed-title-wrap">
                     {selectedCategory === "Trending" ? (
-                        <Flame size={22} color="var(--accent-primary)" />
+                        <Flame size={24} color="var(--accent-primary)" />
                     ) : query ? (
-                        <Sparkles size={22} color="var(--accent-primary)" />
+                        <Sparkles size={24} color="var(--accent-primary)" />
                     ) : (
-                        <Film size={22} color="var(--accent-primary)" />
+                        <Film size={24} color="var(--accent-primary)" />
                     )}
-                    <h1 style={{ fontSize: "1.35rem", fontWeight: 700 }}>
+                    <h1>
                         {query
                             ? `Results for "${query}"`
                             : selectedCategory === "Trending"
@@ -103,8 +103,9 @@ const HomePage = () => {
                     </h1>
                 </div>
                 {!loading && (
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                        {videos.length} {videos.length === 1 ? "VIDEO" : "VIDEOS"}
+                    <div className="feed-badge">
+                        <span className="feed-badge-dot" />
+                        <span>{videos.length} {videos.length === 1 ? "VIDEO" : "VIDEOS"}</span>
                     </div>
                 )}
             </div>

@@ -1180,3 +1180,121 @@ a {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+/* ==========================================================================
+   FEED HEADER & BADGE PILLS
+   ========================================================================== */
+.feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 16px 0 28px;
+  padding-bottom: 4px;
+}
+
+.feed-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.feed-title-wrap h1 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.feed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(16, 18, 28, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.feed-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-primary);
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+/* ==========================================================================
+   CHANNEL PROFILE & BANNER
+   ========================================================================== */
+.channel-banner {
+  height: 200px;
+  width: 100%;
+  border-radius: var(--radius-xl);
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  border: 1px solid var(--border-color);
+  margin-bottom: 28px;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.channel-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(6, 7, 10, 0.1) 0%, rgba(6, 7, 10, 0.8) 100%);
+}
+
+.channel-profile-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 24px 28px;
+  background: var(--bg-glass-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  margin-bottom: 36px;
+  box-shadow: var(--shadow-card);
+}
+
+.channel-profile-avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255, 36, 83, 0.5);
+  box-shadow: var(--accent-glow-subtle);
+  transition: var(--transition-spring);
+}
+
+.channel-profile-avatar:hover {
+  transform: scale(1.05);
+  box-shadow: var(--accent-glow);
+}
+
+/* Video Player Ambient Glow Pulse */
+.player-ambient-glow {
+  animation: ambientPulse 5s ease-in-out infinite alternate;
+}
+
+@keyframes ambientPulse {
+  0% { opacity: 0.75; transform: scale(0.99); }
+  100% { opacity: 1; transform: scale(1.02); }
+}
+
