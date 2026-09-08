@@ -34,22 +34,25 @@ const LikedVideosPage = () => {
 
     if (!user) {
         return (
-            <div style={{ textAlign: "center", padding: "80px 20px" }}>
-                <ThumbsUp size={48} color="var(--accent-primary)" style={{ marginBottom: "16px" }} />
+            <div className="empty-state-box" style={{ marginTop: "40px" }}>
+                <div className="empty-state-badge">
+                    <ThumbsUp size={14} />
+                    <span>COLLECTION</span>
+                </div>
                 <h2>Save your favorite videos</h2>
-                <p style={{ color: "var(--text-secondary)", margin: "8px 0 20px" }}>
-                    Sign in to see the videos you've liked.
+                <p style={{ color: "var(--text-secondary)", maxWidth: "460px", fontSize: "0.94rem" }}>
+                    Sign in to see the videos you've liked, build your collection, and support creators.
                 </p>
-                <Link to="/auth" className="btn btn-primary">Sign In</Link>
+                <Link to="/auth" className="btn btn-primary" style={{ marginTop: "8px" }}>Sign In</Link>
             </div>
         );
     }
 
     return (
         <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
                 <ThumbsUp size={24} color="var(--accent-primary)" />
-                <h1>Liked Videos</h1>
+                <h1 style={{ fontSize: "1.4rem" }}>Liked Videos</h1>
             </div>
 
             {loading ? (
@@ -63,23 +66,14 @@ const LikedVideosPage = () => {
                     ))}
                 </div>
             ) : (
-                <div
-                    style={{
-                        background: "var(--bg-secondary)",
-                        border: "1px dashed var(--border-color)",
-                        borderRadius: "var(--radius-lg)",
-                        padding: "60px 24px",
-                        textAlign: "center",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "12px"
-                    }}
-                >
-                    <Film size={40} color="var(--text-muted)" />
+                <div className="empty-state-box">
+                    <div className="empty-state-badge">
+                        <Film size={14} />
+                        <span>NO LIKES YET</span>
+                    </div>
                     <h3>No liked videos yet</h3>
-                    <p style={{ color: "var(--text-secondary)" }}>
-                        Videos you like will appear here for easy access.
+                    <p style={{ color: "var(--text-secondary)", maxWidth: "460px", fontSize: "0.92rem" }}>
+                        Videos you give a thumbs up to will appear here for easy access.
                     </p>
                 </div>
             )}

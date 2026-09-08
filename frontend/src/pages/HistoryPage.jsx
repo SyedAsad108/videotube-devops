@@ -32,22 +32,25 @@ const HistoryPage = () => {
 
     if (!user) {
         return (
-            <div style={{ textAlign: "center", padding: "80px 20px" }}>
-                <History size={48} color="var(--accent-primary)" style={{ marginBottom: "16px" }} />
+            <div className="empty-state-box" style={{ marginTop: "40px" }}>
+                <div className="empty-state-badge">
+                    <History size={14} />
+                    <span>TIMELINE</span>
+                </div>
                 <h2>Keep track of what you watch</h2>
-                <p style={{ color: "var(--text-secondary)", margin: "8px 0 20px" }}>
-                    Sign in to access your complete watch history.
+                <p style={{ color: "var(--text-secondary)", maxWidth: "460px", fontSize: "0.94rem" }}>
+                    Sign in to access your complete watch history, resume playback, and get personalized recommendations.
                 </p>
-                <Link to="/auth" className="btn btn-primary">Sign In</Link>
+                <Link to="/auth" className="btn btn-primary" style={{ marginTop: "8px" }}>Sign In</Link>
             </div>
         );
     }
 
     return (
         <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
                 <History size={24} color="var(--accent-primary)" />
-                <h1>Watch History</h1>
+                <h1 style={{ fontSize: "1.4rem" }}>Watch History</h1>
             </div>
 
             {loading ? (
@@ -61,23 +64,14 @@ const HistoryPage = () => {
                     ))}
                 </div>
             ) : (
-                <div
-                    style={{
-                        background: "var(--bg-secondary)",
-                        border: "1px dashed var(--border-color)",
-                        borderRadius: "var(--radius-lg)",
-                        padding: "60px 24px",
-                        textAlign: "center",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "12px"
-                    }}
-                >
-                    <Film size={40} color="var(--text-muted)" />
+                <div className="empty-state-box">
+                    <div className="empty-state-badge">
+                        <Film size={14} />
+                        <span>NO HISTORY</span>
+                    </div>
                     <h3>No watch history yet</h3>
-                    <p style={{ color: "var(--text-secondary)" }}>
-                        Videos you watch will appear here.
+                    <p style={{ color: "var(--text-secondary)", maxWidth: "460px", fontSize: "0.92rem" }}>
+                        Videos you watch will appear here so you can easily find them again.
                     </p>
                 </div>
             )}

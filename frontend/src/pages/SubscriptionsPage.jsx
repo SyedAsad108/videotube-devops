@@ -63,41 +63,22 @@ const SubscriptionsPage = () => {
                     <Loader2 size={36} color="var(--accent-primary)" className="animate-spin" />
                 </div>
             ) : channels.length > 0 ? (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>
+                <div className="channel-card-grid">
                     {channels.map((item) => (
-                        <div
-                            key={item._id}
-                            style={{
-                                background: "var(--bg-card)",
-                                border: "1px solid var(--border-color)",
-                                borderRadius: "var(--radius-lg)",
-                                padding: "20px",
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                textAlign: "center",
-                                gap: "12px"
-                            }}
-                        >
+                        <div key={item._id} className="channel-card">
                             <Link to={`/c/${item.channel?.username}`}>
                                 <img
                                     src={item.channel?.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80"}
                                     alt={item.channel?.fullName}
-                                    style={{
-                                        width: "72px",
-                                        height: "72px",
-                                        borderRadius: "var(--radius-full)",
-                                        objectFit: "cover",
-                                        border: "2px solid var(--border-color)"
-                                    }}
+                                    className="channel-avatar"
                                 />
                             </Link>
 
                             <div>
-                                <Link to={`/c/${item.channel?.username}`} style={{ fontWeight: 600, fontSize: "1.05rem" }}>
+                                <Link to={`/c/${item.channel?.username}`} style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.08rem" }}>
                                     {item.channel?.fullName || item.channel?.username}
                                 </Link>
-                                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                                <div style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", color: "var(--text-muted)", marginTop: "3px" }}>
                                     @{item.channel?.username}
                                 </div>
                             </div>
@@ -105,7 +86,7 @@ const SubscriptionsPage = () => {
                             <button
                                 className="btn btn-secondary"
                                 onClick={() => handleUnsubscribe(item.channel?._id)}
-                                style={{ marginTop: "4px", fontSize: "0.82rem" }}
+                                style={{ marginTop: "4px", fontSize: "0.82rem", padding: "8px 16px" }}
                             >
                                 <Bell size={14} />
                                 <span>Unsubscribe</span>

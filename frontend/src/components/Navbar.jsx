@@ -8,6 +8,19 @@ const Navbar = ({ onOpenUpload }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const navigate = useNavigate();
 
+    const inputRef = React.useRef(null);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+                e.preventDefault();
+                inputRef.current?.focus();
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
+
     const handleSearch = (e) => {
         e.preventDefault();
         if (searchQuery.trim()) {
@@ -33,12 +46,13 @@ const Navbar = ({ onOpenUpload }) => {
             <form className="nav-search" onSubmit={handleSearch}>
                 <Search size={16} color="var(--text-muted)" />
                 <input
+                    ref={inputRef}
                     type="text"
-                    placeholder="Search videos, topics, creators..."
+                    placeholder="Search videos, topics, creators... (⌘K)"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                <span className="nav-search-shortcut">⌘K</span>
+                <span className="nav-search-shortcut" title="Press ⌘K or Ctrl+K to search">⌘K</span>
             </form>
 
             <div className="nav-actions">
