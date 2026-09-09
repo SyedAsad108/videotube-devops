@@ -18,8 +18,8 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
         e.preventDefault();
         setError("");
 
-        if (!title.trim() || !description.trim()) {
-            setError("Title and description are required.");
+        if (!title.trim()) {
+            setError("Title is required.");
             return;
         }
 
@@ -164,14 +164,13 @@ const UploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
                     </div>
 
                     <div className="form-group">
-                        <label>Description *</label>
+                        <label>Description (Optional)</label>
                         <textarea
                             placeholder="What is this video about?"
                             rows={3}
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             disabled={uploading}
-                            required
                         />
                     </div>
 

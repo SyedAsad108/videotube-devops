@@ -3,7 +3,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://<db_user>:<db_password>@cluster0.example.mongodb.net/videotube?retryWrites=true&w=majority";
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+    console.error("Error: MONGODB_URI environment variable is required.");
+    process.exit(1);
+}
 
 async function cleanupDemoVideos() {
     console.log("Connecting to MongoDB Atlas to purge broken Google demo videos...");

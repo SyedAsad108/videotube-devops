@@ -22,7 +22,7 @@ resource "aws_lb_target_group" "backend" {
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
-  target_type = "instance"   # EC2 bridge mode requires "instance", not "ip"
+  target_type = "instance" # EC2 bridge mode requires "instance", not "ip"
 
   health_check {
     enabled             = true

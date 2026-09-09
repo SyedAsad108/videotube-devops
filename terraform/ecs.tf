@@ -40,6 +40,27 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+data "aws_secretsmanager_secret" "mongodb_uri" {
+  name = "${local.name_prefix}/mongodb_uri"
+}
+
+resource "aws_iam_role_policy" "ecs_execution_secrets" {
+  name = "${local.name_prefix}-ecs-secrets-policy"
+  role = aws_iam_role.ecs_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "AllowGetMongoDbSecretValue"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "${data.aws_secretsmanager_secret.mongodb_uri.arn}*"
+      }
+    ]
+  })
+}
+
 # ------------------------------------------
 # IAM — ECS Task Role
 # (Allows backend application to access S3)
@@ -244,7 +265,7 @@ resource "aws_ecs_capacity_provider" "ec2" {
   name = "${local.name_prefix}-ec2-capacity-provider"
 
   auto_scaling_group_provider {
-    auto_scaling_group_arn         = aws_autoscaling_group.ecs.arn
+    auto_scaling_group_arn = aws_autoscaling_group.ecs.arn
     managed_scaling {
       status                    = "ENABLED"
       target_capacity           = 100
@@ -276,8 +297,8 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
 # ------------------------------------------
 
 resource "aws_ecs_task_definition" "backend" {
-  family             = "${local.name_prefix}-backend"
-  network_mode       = "bridge"   # EC2 uses bridge networking (not awsvpc like Fargate)
+  family       = "${local.name_prefix}-backend"
+  network_mode = "bridge" # EC2 uses bridge networking (not awsvpc like Fargate)
   # Note: requires_compatibilities intentionally omitted — defaults to EC2
   execution_role_arn = aws_iam_role.ecs_execution.arn
   task_role_arn      = aws_iam_role.ecs_task.arn
@@ -287,8 +308,8 @@ resource "aws_ecs_task_definition" "backend" {
       name      = "backend"
       image     = "${aws_ecr_repository.backend.repository_url}:latest"
       essential = true
-      cpu       = 256   # CPU units reserved on the EC2 host
-      memory    = 400   # Hard memory limit in MB (fits in t3.micro's ~950MB available)
+      cpu       = 256 # CPU units reserved on the EC2 host
+      memory    = 400 # Hard memory limit in MB (fits in t3.micro's ~950MB available)
 
       portMappings = [
         {
@@ -304,7 +325,6 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "PORT", value = tostring(var.container_port) },
         { name = "NODE_ENV", value = "production" },
         { name = "CORS_ORIGIN", value = "http://${aws_lb.main.dns_name},http://localhost:5173" },
-        { name = "MONGODB_URI", value = var.mongodb_uri },
         { name = "REDIS_HOST", value = aws_elasticache_cluster.redis.cache_nodes[0].address },
         { name = "REDIS_PORT", value = "6379" },
         { name = "STORAGE_PROVIDER", value = "s3" },
@@ -314,6 +334,13 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "REFRESH_TOKEN_SECRET", value = var.jwt_refresh_secret },
         { name = "ACCESS_TOKEN_EXPIRY", value = "1d" },
         { name = "REFRESH_TOKEN_EXPIRY", value = "10d" }
+      ]
+
+      secrets = [
+        {
+          name      = "MONGODB_URI"
+          valueFrom = data.aws_secretsmanager_secret.mongodb_uri.arn
+        }
       ]
 
       logConfiguration = {

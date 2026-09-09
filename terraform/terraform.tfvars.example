@@ -8,11 +8,11 @@ project_name         = "videotube"
 environment          = "dev"
 
 # Database & Cache Configuration
-mongodb_uri          = "mongodb+srv://<db_user>:<db_password>@cluster0.example.mongodb.net/videotube?retryWrites=true&w=majority"
+mongodb_uri          = "mongodb+srv://<username>:<password>@cluster0.example.mongodb.net/videotube?retryWrites=true&w=majority"
 elasticache_node_type = "cache.t3.micro"
 
 # JWT Secrets
-jwt_access_secret    = "videotube_production_access_secret_sample_key_998877"
+jwt_access_secret    = "your_jwt_access_secret_sample_key"
 jwt_refresh_secret   = "videotube_production_refresh_secret_sample_key_998877"
 
 # Sizing & Capacity

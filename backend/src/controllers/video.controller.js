@@ -112,10 +112,10 @@ const getAllVideos = asyncHandler(async (req, res) => {
  * @description Upload video and thumbnail to cloud, create record in MongoDB
  */
 const publishAVideo = asyncHandler(async (req, res) => {
-    const { title, description } = req.body;
+    const { title, description = "" } = req.body;
 
-    if (!title || !description || title.trim() === "" || description.trim() === "") {
-        throw new ApiError(400, "Title and description are required");
+    if (!title || title.trim() === "") {
+        throw new ApiError(400, "Title is required");
     }
 
     const videoFileLocalPath = req.files?.videoFile?.[0]?.path;
@@ -148,7 +148,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
 
     const video = await Video.create({
         title: title.trim(),
-        description: description.trim(),
+        description: (description || "").trim(),
         videoFile: videoFile.key || videoFile.url,
         thumbnail: thumbnailUrl,
         duration: videoFile.duration || 0,
