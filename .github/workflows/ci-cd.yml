@@ -268,7 +268,22 @@ jobs:
             --task-definition ${{ env.BACKEND_TASK_FAMILY }} \
             --region ${{ env.AWS_REGION }} \
             --query taskDefinition > backend-task-def-raw.json
-          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' backend-task-def-raw.json > backend-task-definition.json
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) | .containerDefinitions[0].environment |= map(select(.name != "MONGODB_URI"))' backend-task-def-raw.json > backend-task-definition.json
+
+      - name: Audit & Validate Backend Task Definition
+        run: |
+          echo "Auditing Task Definition configuration..."
+          ENV_CONFLICT=$(jq '.containerDefinitions[0].environment[]? | select(.name == "MONGODB_URI")' backend-task-definition.json)
+          if [ -n "$ENV_CONFLICT" ]; then
+            echo "::error::MONGODB_URI detected in container environment array! It must reside exclusively in secrets."
+            exit 1
+          fi
+          SECRET_REF=$(jq -r '.containerDefinitions[0].secrets[]? | select(.name == "MONGODB_URI") | .valueFrom' backend-task-definition.json)
+          if [ -z "$SECRET_REF" ] || [ "$SECRET_REF" = "null" ]; then
+            echo "::error::MONGODB_URI is missing from container secrets array!"
+            exit 1
+          fi
+          echo "Validated: MONGODB_URI configured via Secrets Manager ($SECRET_REF) and absent from plaintext environment."
 
       - name: Render New Backend Task Definition
         id: render-backend-container
@@ -277,8 +292,6 @@ jobs:
           task-definition: backend-task-definition.json
           container-name: backend
           image: ${{ steps.build-backend-image.outputs.image }}
-          environment-variables: |
-            MONGODB_URI=${{ secrets.MONGODB_URI }}
 
       - name: Deploy Backend ECS Task Definition & Wait for Stability
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
