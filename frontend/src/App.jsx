@@ -19,7 +19,7 @@ const SubscriptionsPage = lazy(() => import("./pages/SubscriptionsPage.jsx"));
 // Component-level lazy loading: UploadModal is loaded only when triggered by user
 const UploadModal = lazy(() => import("./components/UploadModal.jsx"));
 
-// Polished fallback loader matching VideoTube dark theme
+// Polished fallback loader matching VideoTube dark theme asada
 const PageLoader = () => (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "55vh" }}>
         <Loader2 size={36} color="var(--accent-primary)" className="animate-spin" />
